@@ -11,11 +11,6 @@ __pycache__/
 backend/data/
 # 또는 모든 위치에서 data 폴더와 그 하위 파일들을 무시
 **/data/
-# 특정 확장자들은 어디에 있든 무시 (중복 방어)
-*.csv
-*.pdf
-*.xlsx
-*.txt
 # 벡터 데이터
 **/chroma_db/
 
