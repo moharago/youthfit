@@ -1,0 +1,15 @@
+# 파이썬 가상환경 (용량이 크고 각자 설치해야 함)
+venv/
+__pycache__/
+*.py[cod]
+
+# 환경 변수 및 비밀키 (가장 중요! 내 API 키 유출 방지)
+.env
+
+# 데이터 파일 (공공데이터 CSV나 용량이 큰 텍스트 파일)
+backend/data/*.csv
+backend/data/*.txt
+
+# 운영체제 생성 파일
+.DS_Store
+Thumbs.db
