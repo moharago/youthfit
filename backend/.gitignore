@@ -9,6 +9,7 @@ __pycache__/
 # 데이터 파일 (공공데이터 CSV나 용량이 큰 텍스트 파일)
 backend/data/*.csv
 backend/data/*.txt
+backend/data/*.pdf
 
 # 운영체제 생성 파일
 .DS_Store
