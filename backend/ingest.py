@@ -10,8 +10,8 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 
 def run_free_ingestion():
-    data_folder = 'data'
-    persist_directory = "./chroma_db"
+    data_folder = 'data/files'
+    persist_directory = "./data/chroma_db"
     
     # 1. 한국어 임베딩 모델 로드
     print("⏳ 한국어 임베딩 모델 로딩 중...")
