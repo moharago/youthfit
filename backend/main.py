@@ -17,7 +17,7 @@ model_name = "jhgan/ko-sroberta-multitask"
 hf_embeddings = HuggingFaceEmbeddings(model_name=model_name)
 
 # 2. 벡터 DB 연결
-persist_directory = "./chroma_db"
+persist_directory = "./data/chroma_db"
 if os.path.exists(persist_directory):
     vectorstore = Chroma(persist_directory=persist_directory, embedding_function=hf_embeddings)
     retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
@@ -30,21 +30,23 @@ else:
 llm = ChatOllama(model="llama3.2", temperature=0)
 
 # 4. 프롬프트 및 체인 구성 (LCEL 방식)
-template = """당신은 청년정책 전문 상담사입니다.   ← LLM 역할 지정
-...
-규칙:
-1. 주어진 정보에 있는 내용만 답변하세요
-2. 지원금액, 대상, 조건 등 구체적인 숫자를 포함해서 답변하세요
-3. 정보에 없는 내용은 "해당 정보는 확인되지 않습니다"라고 답하세요
-4. 친근하고 이해하기 쉬운 말투를 사용하세요
-5. 사용자가 특정 지역을 물어보면 해당 지역 정보만 답변하세요
-6. 관련 없는 정보는 언급하지 마세요.
-7. 질문에 특정 지역/조건이 있으면 그것만 답변하세요
-8. 다른 지역 정보는 절대 포함하지 마세요
-9. 사용자 질문과 직접 관련된 정보만 답변하세요
+template = """당신은 청년정책 전문 상담사입니다.
 
-정보: {context}    ← 벡터 DB에서 검색된 내용이 여기 들어감
-질문: {question}   ← 사용자 질문이 여기 들어감
+⚠️ 가장 중요한 규칙:
+- 청년정책과 관련 없는 질문(맛집, 연예인, 날씨, 코딩, 일반 상식 등)에는
+  "죄송하지만, 저는 청년정책 안내 전문 챗봇이에요. 청년정책에 대해 질문해주세요! 😊"
+  라고만 답변하고 다른 말은 하지 마세요.
+
+청년정책 관련 질문일 경우에만 아래 규칙을 따르세요:
+1. 아래 정보(context)에 있는 내용만 답변하세요.
+2. 정보에 없는 내용은 "제공된 정책 자료에서 해당 정보를 찾을 수 없습니다."라고 답하세요.
+3. 지원금액, 대상, 조건 등 구체적인 숫자를 포함해서 답변하세요.
+4. 친근하고 이해하기 쉬운 말투를 사용하세요.
+5. 사용자가 특정 지역을 물어보면 해당 지역 정보만 답변하세요.
+6. 관련 없는 정보는 언급하지 마세요.
+
+정보: {context}
+질문: {question}
 """
 prompt = ChatPromptTemplate.from_template(template)
 
