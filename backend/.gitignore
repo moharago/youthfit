@@ -7,10 +7,17 @@ __pycache__/
 .env
 
 # 데이터 파일 (공공데이터 CSV나 용량이 큰 텍스트 파일)
-# Vector DB (절대 커밋 금지)
-backend/data/chroma_db/
-# Raw data files (원본 문서)
-backend/data/files/
+# backend/data/ 폴더 전체를 무시 (가장 깔끔)
+backend/data/
+# 또는 모든 위치에서 data 폴더와 그 하위 파일들을 무시
+**/data/
+# 특정 확장자들은 어디에 있든 무시 (중복 방어)
+*.csv
+*.pdf
+*.xlsx
+*.txt
+# 벡터 데이터
+**/chroma_db/
 
 # 운영체제 생성 파일
 .DS_Store
