@@ -17,3 +17,6 @@ backend/data/
 # 운영체제 생성 파일
 .DS_Store
 Thumbs.db
+
+# report runtime outputs
+backend/report_exports/
