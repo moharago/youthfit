@@ -6,7 +6,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Dict, Any
 
 from langchain_ollama import ChatOllama
 from langchain_community.embeddings import HuggingFaceEmbeddings
@@ -21,6 +21,9 @@ from user_service import (
     format_history,
 )
 from database import get_user
+from router import route_question
+from clarify_service import format_clarify_message, should_force_clarify_for_eligibility
+
 
 # =========================
 # 벡터 DB
@@ -116,6 +119,24 @@ def get_user_info_text(user_id: str) -> str:
     
     return ", ".join(parts) if parts else "사용자 정보 없음"
 
+def run_rag(question: str, user_id: str) -> str:
+    history = format_history(get_recent_chats(user_id))
+    user_info = get_user_info_text(user_id)
+
+    docs = retriever.invoke(question)
+    if not docs:
+        return "관련 정책 정보를 찾을 수 없습니다."
+
+    context = "\n\n".join(d.page_content for d in docs)
+    chain = prompt | llm | StrOutputParser()
+
+    return chain.invoke({
+        "question": question,
+        "context": context,
+        "history": history,
+        "user_info": user_info
+    })
+
 
 def is_info_only(message: str) -> bool:
     """정보 제공만 하는 메시지인지 확인"""
@@ -143,13 +164,13 @@ async def chat(req: ChatRequest):
     extracted = process_and_save(user_id, message, llm)
     print(f"📝 추출된 정보: {extracted}")
 
-    # 2️⃣ 관련 없는 질문 거절
+    # 2) 관련 없는 질문 거절
     if is_unrelated(message):
         answer = "죄송하지만, 저는 청년정책 안내 전문 챗봇이에요. 청년정책에 대해 질문해주세요! 😊"
         save_chat(user_id, "assistant", answer)
         return {"answer": answer}
 
-    # 3️⃣ 정보만 제공한 경우 → 해당 조건 기반 정책 추천
+    # 3) 정보만 제공한 경우 → 조건 기반 추천(기존 기능 유지)
     if extracted and is_info_only(message):
         search_query = ""
         if extracted.get("region"):
@@ -158,68 +179,56 @@ async def chat(req: ChatRequest):
             search_query += f"{extracted['job_status']} "
         if extracted.get("age"):
             search_query += f"{extracted['age']}세 "
-        
         search_query += "청년 지원 정책"
-        
+
         docs = retriever.invoke(search_query)
-        
-        # ⭐ 디버깅: 검색된 문서 출력
-        print("=" * 50)
-        print(f"🔍 검색어: {search_query}")
-        print("📄 검색된 문서:")
-        for i, doc in enumerate(docs):
-            print(f"\n[문서 {i+1}]")
-            print(doc.page_content[:200])
-        print("=" * 50)
-        
         if docs:
             context = "\n\n".join(d.page_content for d in docs)
-            user_info = get_user_info_text(user_id)
             history = format_history(get_recent_chats(user_id))
-            
+            user_info = get_user_info_text(user_id)
+
             chain = prompt | llm | StrOutputParser()
             answer = chain.invoke({
-                "question": f"{extracted}에 해당하는 청년 정책 추천해줘",
+                "question": f"{extracted} 조건에 맞을 수 있는 청년 정책을 안내해줘. 단, 확정 추천은 금지하고 추가 확인사항을 같이 안내해줘.",
                 "context": context,
                 "history": history,
                 "user_info": user_info
             })
         else:
             answer = f"정보 저장했어요! ({extracted}) 관련 정책을 찾아볼게요. 어떤 분야가 궁금하세요? (취업/주거/금융/창업)"
-        
+
         save_chat(user_id, "assistant", answer)
         return {"answer": answer}
 
-    # 4️⃣ 일반 정책 질문 → RAG 실행
-    history = format_history(get_recent_chats(user_id))
-    user_info = get_user_info_text(user_id)
-    docs = retriever.invoke(message)
+    # 4) Router 판단 (✅ 신규)
+    user_profile = get_user(user_id) or {}
+    route_result = route_question(message, user_profile, extracted, llm)
+    print(f"🧭 ROUTER: {route_result}")
 
-    # ⭐ 디버깅: 검색된 문서 출력
-    print("=" * 50)
-    print(f"🔍 검색어: {message}")
-    print("📄 검색된 문서:")
-    for i, doc in enumerate(docs):
-        print(f"\n[문서 {i+1}]")
-        print(f"📁 출처: {doc.metadata.get('source', '알 수 없음')}")
-        print(doc.page_content[:300])
-    print("=" * 50)
+    # Router 흔들릴 때 대비: 판정형 키워드가 강하면 강제 clarify
+    if should_force_clarify_for_eligibility(message) and route_result["route"] == "RAG_DIRECT":
+        # profile이 비었으면 기본 missing 잡아도 됨(최소 질문)
+        route_result["route"] = "ASK_CLARIFY"
+        if not route_result.get("missing_fields"):
+            route_result["missing_fields"] = ["region", "income_level", "unemployment_benefit"]
+        route_result["reason"] = "판정형 질문(키워드) + 정보 부족 가능성"
 
-    if not docs:
-        answer = "제공된 정책 자료에서 해당 정보를 찾을 수 없습니다."
+
+    # 4-1) ASK_CLARIFY → clarify_service에서 질문 생성
+    if route_result["route"] == "ASK_CLARIFY":
+        answer = format_clarify_message(route_result)
         save_chat(user_id, "assistant", answer)
         return {"answer": answer}
 
-    context = "\n\n".join(d.page_content for d in docs)
-    chain = prompt | llm | StrOutputParser()
+    # 4-2) RAG_REWRITE → rewrite_question으로 RAG
+    if route_result["route"] == "RAG_REWRITE":
+        rq = route_result.get("rewrite_question") or message
+        answer = run_rag(rq, user_id)
+        save_chat(user_id, "assistant", answer)
+        return {"answer": answer}
 
-    answer = chain.invoke({
-        "question": message,
-        "context": context,
-        "history": history,
-        "user_info": user_info
-    })
-
+    # 4-3) RAG_DIRECT → 그대로 RAG
+    answer = run_rag(message, user_id)
     save_chat(user_id, "assistant", answer)
     return {"answer": answer}
 
