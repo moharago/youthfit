@@ -1,48 +1,44 @@
-# database.py
+# database.py (MySQL 버전)
 
-import sqlite3
+import os
 import json
 from datetime import datetime
 from typing import Dict, Any, List, Optional
+from sqlalchemy import create_engine, text
+from sqlalchemy.pool import QueuePool
+from dotenv import load_dotenv
 
-DB_PATH = "youthfit.db"
+load_dotenv()
+
+# MySQL 연결 설정
+MYSQL_HOST = os.getenv("MYSQL_HOST", "localhost")
+MYSQL_PORT = os.getenv("MYSQL_PORT", "3306")
+MYSQL_USER = os.getenv("MYSQL_USER", "root")
+MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "")
+MYSQL_DATABASE = os.getenv("MYSQL_DATABASE", "youthfit")
+
+DATABASE_URL = f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DATABASE}?charset=utf8mb4"
+
+# 엔진 생성
+engine = create_engine(
+    DATABASE_URL,
+    poolclass=QueuePool,
+    pool_size=5,
+    max_overflow=10,
+    echo=False
+)
+
 
 def init_db():
-    """DB 초기화 - 테이블 생성"""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
-    # 사용자 정보 테이블
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            user_id TEXT PRIMARY KEY,
-            age INTEGER,
-            region TEXT,
-            job_status TEXT,
-            income_level TEXT,
-            housing_type TEXT,
-            interests TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    
-    # 대화 기록 테이블
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS chat_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id TEXT,
-            role TEXT,
-            content TEXT,
-            extracted_info TEXT,
-            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users (user_id)
-        )
-    """)
-    
-    conn.commit()
-    conn.close()
-    print("✅ DB 초기화 완료")
+    """DB 연결 테스트"""
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        print("✅ MySQL 연결 성공!")
+        return True
+    except Exception as e:
+        print(f"❌ MySQL 연결 실패: {e}")
+        return False
 
 
 # =====================
@@ -51,69 +47,55 @@ def init_db():
 
 def get_user(user_id: str) -> Optional[Dict[str, Any]]:
     """사용자 정보 조회"""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    
-    cursor.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
-    row = cursor.fetchone()
-    conn.close()
-    
-    if row:
-        user = dict(row)
-        # interests는 JSON 파싱
-        if user.get("interests"):
-            user["interests"] = json.loads(user["interests"])
-        return user
+    with engine.connect() as conn:
+        result = conn.execute(
+            text("SELECT * FROM users WHERE user_id = :user_id"),
+            {"user_id": user_id}
+        )
+        row = result.fetchone()
+        
+        if row:
+            user = dict(row._mapping)
+            if user.get("interests") and isinstance(user["interests"], str):
+                user["interests"] = json.loads(user["interests"])
+            return user
     return None
 
 
 def create_user(user_id: str) -> Dict[str, Any]:
     """새 사용자 생성"""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
-    cursor.execute(
-        "INSERT OR IGNORE INTO users (user_id) VALUES (?)",
-        (user_id,)
-    )
-    conn.commit()
-    conn.close()
+    with engine.connect() as conn:
+        conn.execute(
+            text("INSERT IGNORE INTO users (user_id) VALUES (:user_id)"),
+            {"user_id": user_id}
+        )
+        conn.commit()
     
     return get_user(user_id) or {"user_id": user_id}
 
 
 def update_user(user_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
     """사용자 정보 업데이트"""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
-    # 사용자가 없으면 생성
     create_user(user_id)
     
-    # 업데이트할 필드 필터링
     valid_fields = ["age", "region", "job_status", "income_level", "housing_type", "interests"]
-    filtered_updates = {k: v for k, v in updates.items() if k in valid_fields and v is not None}
+    filtered = {k: v for k, v in updates.items() if k in valid_fields and v is not None}
     
-    if not filtered_updates:
-        conn.close()
+    if not filtered:
         return get_user(user_id)
     
-    # interests는 JSON으로 저장
-    if "interests" in filtered_updates:
-        filtered_updates["interests"] = json.dumps(filtered_updates["interests"], ensure_ascii=False)
+    if "interests" in filtered and isinstance(filtered["interests"], list):
+        filtered["interests"] = json.dumps(filtered["interests"], ensure_ascii=False)
     
-    # UPDATE 쿼리 생성
-    set_clause = ", ".join([f"{k} = ?" for k in filtered_updates.keys()])
-    set_clause += ", updated_at = ?"
-    values = list(filtered_updates.values()) + [datetime.now(), user_id]
+    set_parts = [f"{k} = :{k}" for k in filtered.keys()]
+    set_clause = ", ".join(set_parts)
     
-    cursor.execute(
-        f"UPDATE users SET {set_clause} WHERE user_id = ?",
-        values
-    )
-    conn.commit()
-    conn.close()
+    with engine.connect() as conn:
+        conn.execute(
+            text(f"UPDATE users SET {set_clause}, updated_at = NOW() WHERE user_id = :user_id"),
+            {**filtered, "user_id": user_id}
+        )
+        conn.commit()
     
     return get_user(user_id)
 
@@ -125,8 +107,7 @@ def get_missing_fields(user_id: str) -> List[str]:
         return ["age", "region", "job_status"]
     
     required = ["age", "region", "job_status"]
-    missing = [field for field in required if not user.get(field)]
-    return missing
+    return [field for field in required if not user.get(field)]
 
 
 # =====================
@@ -135,38 +116,42 @@ def get_missing_fields(user_id: str) -> List[str]:
 
 def save_message(user_id: str, role: str, content: str, extracted_info: Dict = None):
     """대화 저장"""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
+    create_user(user_id)
     
     extracted_json = json.dumps(extracted_info, ensure_ascii=False) if extracted_info else None
     
-    cursor.execute(
-        "INSERT INTO chat_history (user_id, role, content, extracted_info) VALUES (?, ?, ?, ?)",
-        (user_id, role, content, extracted_json)
-    )
-    conn.commit()
-    conn.close()
+    with engine.connect() as conn:
+        conn.execute(
+            text("""
+                INSERT INTO chat_history (user_id, role, content, extracted_info)
+                VALUES (:user_id, :role, :content, :extracted_info)
+            """),
+            {
+                "user_id": user_id,
+                "role": role,
+                "content": content,
+                "extracted_info": extracted_json
+            }
+        )
+        conn.commit()
 
 
 def get_chat_history(user_id: str, limit: int = 10) -> List[Dict[str, Any]]:
     """최근 대화 기록 조회"""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
+    with engine.connect() as conn:
+        result = conn.execute(
+            text("""
+                SELECT role, content, timestamp 
+                FROM chat_history 
+                WHERE user_id = :user_id 
+                ORDER BY timestamp DESC 
+                LIMIT :limit
+            """),
+            {"user_id": user_id, "limit": limit}
+        )
+        rows = result.fetchall()
     
-    cursor.execute("""
-        SELECT role, content, timestamp 
-        FROM chat_history 
-        WHERE user_id = ? 
-        ORDER BY timestamp DESC 
-        LIMIT ?
-    """, (user_id, limit))
-    
-    rows = cursor.fetchall()
-    conn.close()
-    
-    # 시간순 정렬 (오래된 것 먼저)
-    return [dict(row) for row in reversed(rows)]
+    return [dict(row._mapping) for row in reversed(rows)]
 
 
 def get_chat_context(user_id: str, limit: int = 5) -> str:
@@ -184,5 +169,5 @@ def get_chat_context(user_id: str, limit: int = 5) -> str:
     return context
 
 
-# 앱 시작 시 DB 초기화
+# 앱 시작 시 DB 연결 테스트
 init_db()

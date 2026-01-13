@@ -119,7 +119,7 @@ def run_free_ingestion():
     # 4. 텍스트 분할
     # =====================
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=500, 
+        chunk_size=300, 
         chunk_overlap=50
     )
     texts = text_splitter.split_documents(all_documents)

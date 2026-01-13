@@ -1,121 +1,220 @@
 # FastAPI 실행 및 앤드포인트 설정
 
+# main.py
+
 import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import Optional
 
-from langchain_ollama import ChatOllama 
+from langchain_ollama import ChatOllama
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 
-# 1. 임베딩 모델 로드 (ingest.py와 동일해야 함)
-model_name = "jhgan/ko-sroberta-multitask"
-hf_embeddings = HuggingFaceEmbeddings(model_name=model_name)
+from user_service import (
+    process_and_save,
+    save_chat,
+    get_recent_chats,
+    format_history,
+)
+from database import get_user
 
-# 2. 벡터 DB 연결
-persist_directory = "./data/chroma_db"
-if os.path.exists(persist_directory):
-    vectorstore = Chroma(persist_directory=persist_directory, embedding_function=hf_embeddings)
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
-    print("✅ 벡터 DB 연결 성공!")
-else:
-    print("❌ DB가 없습니다. ingest.py를 먼저 실행하세요.")
-    retriever = None
+# =========================
+# 벡터 DB
+# =========================
+hf_embeddings = HuggingFaceEmbeddings(
+    model_name="jhgan/ko-sroberta-multitask"
+)
 
-# 3. Ollama Llama 3.2 모델 설정
+vectorstore = Chroma(
+    persist_directory="./data/chroma_db",
+    embedding_function=hf_embeddings
+)
+
+retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
+
+# =========================
+# LLM
+# =========================
 llm = ChatOllama(model="llama3.2", temperature=0)
 
-# 4. 프롬프트 및 체인 구성 (LCEL 방식)
-template = """당신은 청년정책 전문 상담사입니다.   ← LLM 역할 지정
-...
-규칙:
-1. 청년정책 관련이 아닌 질문에는 절대 답변하지 마세요
-2. 문맥에 관련 정보가 없으면 "제공된 정책 자료에서 해당 정보를 찾을 수 없습니다."라고 답하세요.
-3. 반드시 제공된 [정보] 내의 내용만 사용하세요. [정보]에 없는 내용은 "제공된 정책 자료에서 해당 정보를 찾을 수 없습니다."라고 정중히 답하세요. 
-4. 지원금액, 대상, 조건 등 구체적인 숫자를 포함해서 답변하세요
-5. 일본어, 영어, 태국어 등 다른 언어는 절대 사용하지 말고 한국어로만 대답하세요
-6. 친근하고 이해하기 쉬운 말투를 사용하세요
-7. 사용자가 특정 지역을 물어보면 해당 지역 정보만 답변하세요
-8. 사용자 질문과 직접 관련된 정보만 답변하세요
+# =========================
+# Prompt
+# =========================
+prompt = ChatPromptTemplate.from_template("""
+당신은 청년정책 전문 상담사입니다.
 
-정보: {context}    ← 벡터 DB에서 검색된 내용이 여기 들어감
-질문: {question}   ← 사용자 질문이 여기 들어감
-"""
-prompt = ChatPromptTemplate.from_template(template)
+[사용자 정보]
+{user_info}
 
-def format_docs(docs):
-    return "\n\n".join(doc.page_content for doc in docs)
+[이전 대화]
+{history}
 
-# 최종 챗봇 체인
-if retriever:
-    qa_chain = (
-        {"context": retriever | format_docs, "question": RunnablePassthrough()}
-        | prompt
-        | llm
-        | StrOutputParser()
-    )
-else:
-    qa_chain = None
+[정책 정보]
+{context}
 
-# --- FastAPI 설정 ---
+[질문]
+{question}
+
+⛔ 절대 규칙 (반드시 지키세요):
+1. 위 [정책 정보]에 있는 내용"만" 답변하세요.
+2. [정책 정보]에 없는 정책명은 절대 언급 금지!
+3. 추측, 상상, 지어내기 절대 금지!
+4. 모르면 "제공된 자료에서 해당 정보를 찾을 수 없습니다"라고만 하세요.
+5. 반드시 한국어로만 답변하세요.
+6. 사용자 정보(나이, 지역)에 맞는 정책을 우선 추천하세요.
+
+⚠️ [정책 정보]에 없는 내용을 말하면 큰 문제가 생깁니다!
+""")
+
+# =========================
+# FastAPI
+# =========================
 app = FastAPI()
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 class ChatRequest(BaseModel):
     message: str
+    user_id: Optional[str] = "guest"
+
+
+def get_user_info_text(user_id: str) -> str:
+    """사용자 정보를 텍스트로 변환"""
+    user = get_user(user_id)
+    if not user:
+        return "사용자 정보 없음"
+    
+    parts = []
+    if user.get("age"):
+        parts.append(f"나이: {user['age']}세")
+    if user.get("region"):
+        parts.append(f"지역: {user['region']}")
+    if user.get("job_status"):
+        parts.append(f"취업상태: {user['job_status']}")
+    if user.get("income_level"):
+        parts.append(f"소득수준: {user['income_level']}")
+    if user.get("housing_type"):
+        parts.append(f"주거형태: {user['housing_type']}")
+    
+    return ", ".join(parts) if parts else "사용자 정보 없음"
+
+
+def is_info_only(message: str) -> bool:
+    """정보 제공만 하는 메시지인지 확인"""
+    info_patterns = ["살아", "살고", "이야", "예요", "입니다", "세야", "살이야"]
+    question_patterns = ["알려줘", "뭐야", "추천", "어때", "있어", "?"]
+    
+    has_info = any(p in message for p in info_patterns)
+    has_question = any(p in message for p in question_patterns)
+    
+    return has_info and not has_question
+
+
+def is_unrelated(message: str) -> bool:
+    """청년정책과 전혀 관련 없는 질문인지 확인"""
+    unrelated = ["맛집", "날씨", "연예인", "게임", "영화", "노래"]
+    return any(u in message for u in unrelated)
+
 
 @app.post("/chat")
-async def chat(request: ChatRequest):
-    try:
-        if not qa_chain:
-            return {"answer": "서버 설정 오류: DB가 연결되지 않았습니다."}
-        
-        answer = qa_chain.invoke(request.message)
+async def chat(req: ChatRequest):
+    user_id = req.user_id
+    message = req.message.strip()
+
+    # 1️⃣ 정보 추출 + 저장
+    extracted = process_and_save(user_id, message, llm)
+    print(f"📝 추출된 정보: {extracted}")
+
+    # 2️⃣ 관련 없는 질문 거절
+    if is_unrelated(message):
+        answer = "죄송하지만, 저는 청년정책 안내 전문 챗봇이에요. 청년정책에 대해 질문해주세요! 😊"
+        save_chat(user_id, "assistant", answer)
         return {"answer": answer}
-    except Exception as e:
-        return {"answer": f"에러 발생: {str(e)}"}
+
+    # 3️⃣ 정보만 제공한 경우 → 해당 조건 기반 정책 추천
+    if extracted and is_info_only(message):
+        search_query = ""
+        if extracted.get("region"):
+            search_query += f"{extracted['region']} 청년 정책 "
+        if extracted.get("job_status"):
+            search_query += f"{extracted['job_status']} "
+        if extracted.get("age"):
+            search_query += f"{extracted['age']}세 "
+        
+        search_query += "청년 지원 정책"
+        
+        docs = retriever.invoke(search_query)
+        
+        # ⭐ 디버깅: 검색된 문서 출력
+        print("=" * 50)
+        print(f"🔍 검색어: {search_query}")
+        print("📄 검색된 문서:")
+        for i, doc in enumerate(docs):
+            print(f"\n[문서 {i+1}]")
+            print(doc.page_content[:200])
+        print("=" * 50)
+        
+        if docs:
+            context = "\n\n".join(d.page_content for d in docs)
+            user_info = get_user_info_text(user_id)
+            history = format_history(get_recent_chats(user_id))
+            
+            chain = prompt | llm | StrOutputParser()
+            answer = chain.invoke({
+                "question": f"{extracted}에 해당하는 청년 정책 추천해줘",
+                "context": context,
+                "history": history,
+                "user_info": user_info
+            })
+        else:
+            answer = f"정보 저장했어요! ({extracted}) 관련 정책을 찾아볼게요. 어떤 분야가 궁금하세요? (취업/주거/금융/창업)"
+        
+        save_chat(user_id, "assistant", answer)
+        return {"answer": answer}
+
+    # 4️⃣ 일반 정책 질문 → RAG 실행
+    history = format_history(get_recent_chats(user_id))
+    user_info = get_user_info_text(user_id)
+    docs = retriever.invoke(message)
+
+    # ⭐ 디버깅: 검색된 문서 출력
+    print("=" * 50)
+    print(f"🔍 검색어: {message}")
+    print("📄 검색된 문서:")
+    for i, doc in enumerate(docs):
+        print(f"\n[문서 {i+1}]")
+        print(f"📁 출처: {doc.metadata.get('source', '알 수 없음')}")
+        print(doc.page_content[:300])
+    print("=" * 50)
+
+    if not docs:
+        answer = "제공된 정책 자료에서 해당 정보를 찾을 수 없습니다."
+        save_chat(user_id, "assistant", answer)
+        return {"answer": answer}
+
+    context = "\n\n".join(d.page_content for d in docs)
+    chain = prompt | llm | StrOutputParser()
+
+    answer = chain.invoke({
+        "question": message,
+        "context": context,
+        "history": history,
+        "user_info": user_info
+    })
+
+    save_chat(user_id, "assistant", answer)
+    return {"answer": answer}
+
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
-# from fastapi import FastAPI
-# from fastapi.middleware.cors import CORSMiddleware
-# from pydantic import BaseModel
-# from engine import get_chat_response
-
-# # 1. FastAPI 앱 생성
-# app = FastAPI()
-
-# # 2. CORS 설정 (이 부분이 있어야 React와 연결됩니다!)
-# app.add_middleware(
-#     CORSMiddleware,
-#     allow_origins=["*"],      # 모든 곳에서 오는 요청 허용 (개발 단계에서 편리)
-#     allow_credentials=True,
-#     allow_methods=["*"],      # GET, POST 등 모든 방식 허용
-#     allow_headers=["*"],      # 모든 헤더 허용
-# )
-
-# # 3. 데이터 모델 정의 (schema.py로 분리 가능)
-# class ChatRequest(BaseModel):
-#     message: str
-
-# # 4. 테스트용 엔드포인트
-# @app.get("/")
-# def read_root():
-#     return {"status": "FastAPI Server is Running!"}
-
-# # 5. 실제 채팅 엔드포인트
-# @app.post("/chat")
-# async def chat(request: ChatRequest):
-#     # 나중에 여기에 engine.py의 로직을 연결할 거예요.
-#     user_message = request.message
-#     # engine.py의 함수를 실행하여 진짜 답변을 가져옵니다.
-#     answer = get_chat_response(user_message)
-#     print(f"사용자 질문: {user_message}")
-    
-#     return {"answer": answer}

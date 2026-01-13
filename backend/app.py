@@ -2,6 +2,7 @@
 
 import streamlit as st
 import requests
+import uuid  # ⭐ 추가
 
 # 페이지 설정
 st.set_page_config(
@@ -10,6 +11,12 @@ st.set_page_config(
     layout="centered",
     initial_sidebar_state="collapsed"
 )
+
+# ⭐ 추가: 사용자 고유 ID 생성
+if "user_id" not in st.session_state:
+    st.session_state.user_id = str(uuid.uuid4())
+
+user_id = st.session_state.user_id
 
 # 커스텀 CSS
 st.markdown("""
@@ -221,7 +228,6 @@ with col6:
         st.session_state.category = "복지"
 
 # 카테고리 선택 시 정책 목록 표시
-# 카테고리 선택 시 정책 목록 표시
 if st.session_state.category:
     cat = st.session_state.category
     cat_data = CATEGORY_POLICIES[cat]
@@ -241,7 +247,6 @@ if st.session_state.category:
     
     for policy in cat_data["policies"]:
         if st.button(f"👉 {policy['question']}", key=f"q_{policy['name']}"):
-            # 클릭하면 질문 + 답변 바로 실행
             with st.chat_message("user"):
                 st.markdown(policy['question'])
             st.session_state.messages.append({"role": "user", "content": policy['question']})
@@ -251,8 +256,11 @@ if st.session_state.category:
                     try:
                         response = requests.post(
                             "http://127.0.0.1:8000/chat",
-                            json={"message": policy['question']},
-                            timeout=60
+                            json={
+                                "message": policy['question'],
+                                "user_id": user_id  # ⭐ 추가
+                            },
+                            timeout=180  # ⭐ 60 → 180
                         )
                         answer = response.json().get("answer", "오류가 발생했습니다.")
                     except:
@@ -274,7 +282,6 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-
 # 자동 질문 처리 (정책 클릭 시)
 if st.session_state.selected_question:
     prompt = st.session_state.selected_question
@@ -289,8 +296,11 @@ if st.session_state.selected_question:
             try:
                 response = requests.post(
                     "http://127.0.0.1:8000/chat",
-                    json={"message": prompt},
-                    timeout=60
+                    json={
+                        "message": prompt,
+                        "user_id": user_id  # ⭐ 추가
+                    },
+                    timeout=180  # ⭐ 60 → 180
                 )
                 answer = response.json().get("answer", "오류가 발생했습니다.")
             except:
@@ -309,8 +319,11 @@ if prompt := st.chat_input("💬 질문을 입력하세요..."):
             try:
                 response = requests.post(
                     "http://127.0.0.1:8000/chat",
-                    json={"message": prompt},
-                    timeout=60
+                    json={
+                        "message": prompt,
+                        "user_id": user_id  # ⭐ 추가
+                    },
+                    timeout=180  # ⭐ 60 → 180
                 )
                 answer = response.json().get("answer", "오류가 발생했습니다.")
             except:
@@ -328,6 +341,9 @@ with st.sidebar:
     """)
     
     st.markdown("---")
+    
+    # ⭐ 추가: 디버그용 user_id 표시
+    st.markdown(f"🆔 `{user_id[:8]}...`")
     
     if st.button("🗑️ 대화 초기화", use_container_width=True):
         st.session_state.messages = []
