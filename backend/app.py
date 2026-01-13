@@ -1,5 +1,4 @@
 # backend/app.py
-
 import streamlit as st
 import requests
 import uuid  # ⭐ 추가
@@ -202,6 +201,140 @@ if "messages" not in st.session_state:
 if "selected_question" not in st.session_state:
     st.session_state.selected_question = None
 
+
+# =========================
+# 업데이트 by Dayforged (보고서 기능) - 추가 시작
+# =========================
+from urllib.parse import urlencode, quote
+import streamlit.components.v1 as components
+
+if "chat_ended" not in st.session_state:
+    st.session_state.chat_ended = False
+if "report_payload" not in st.session_state:
+    st.session_state.report_payload = None
+
+# - LOG 기반 파일 report_id 저장(추가)
+if "report_id" not in st.session_state:
+    st.session_state.report_id = None
+# =========================
+# 업데이트 by Dayforged (보고서 기능) - 추가 끝
+# =========================
+
+def _get_query_params() -> dict:
+    try:
+        qp = dict(st.query_params)
+        return qp
+    except Exception:
+        try:
+            qp = st.experimental_get_query_params()
+            return dict(qp) if isinstance(qp, dict) else {}
+        except Exception:
+            return {}
+
+def _clear_query_params() -> None:
+    try:
+        st.query_params.clear()
+        return
+    except Exception:
+        try:
+            st.experimental_set_query_params()
+        except Exception:
+            pass
+
+# ✅ 업데이트 by Dayforged (보고서 기능) - 추가 시작
+def _build_chat_log_for_report() -> list:
+    """
+    Streamlit 세션 messages를 ReportFromLogRequest.chat_log 형태로 변환
+    """
+    out = []
+    for m in st.session_state.messages:
+        role = m.get("role")
+        if role not in ("user", "assistant", "system"):
+            role = "system"
+        out.append({
+            "role": role,
+            "content": m.get("content", ""),
+            "ts": None
+        })
+    return out
+# ✅ 업데이트 by Dayforged (보고서 기능) - 추가 끝
+
+# (A-1) ?end=1로 들어오면 상담 종료 + report_payload 저장
+qp = _get_query_params()
+end_flag = qp.get("end")
+if isinstance(end_flag, list):
+    end_flag = end_flag[0] if end_flag else None
+
+if str(end_flag) == "1" and not st.session_state.chat_ended:
+    st.session_state.chat_ended = True
+
+    try:
+        resp = requests.post(
+            "http://127.0.0.1:8000/report/from_log",
+            json={
+                "session_id": user_id,
+                "chat_log": _build_chat_log_for_report(),
+                "extracted_facts": None
+            },
+            timeout=180
+        )
+        data = resp.json()
+        st.session_state.report_id = data.get("report_id")
+        st.session_state.report_payload = data.get("payload")
+    except Exception:
+        st.session_state.report_id = None
+        st.session_state.report_payload = None
+
+    _clear_query_params()
+    st.rerun()
+
+end_url = "?" + urlencode({"end": 1})
+
+st.markdown(
+    f"""
+    <style>
+      .report-fixed-footer {{
+        position: fixed;
+        left: 50%;
+        transform: translateX(-50%);
+        bottom: 8.5px;
+        z-index: 9999;
+      }}
+
+      .report-fixed-footer a {{
+        display: inline-block;
+        background: white;
+        color: #1e90ff;
+        border: 1px solid #1e90ff;
+        border-radius: 999px;
+
+        padding: 10px 13px;
+        font-size: 0.95rem;
+        font-weight: 520;
+        line-height: 1.0;
+
+        box-shadow: 0 6px 14px rgba(0,0,0,0.16);
+        text-decoration: none;
+        white-space: nowrap;
+      }}
+
+      .report-fixed-footer a:hover {{
+        background: #1e90ff;
+        color: white;
+      }}
+
+      .stApp {{
+        padding-bottom: 0px;
+      }}
+    </style>
+
+    <div class="report-fixed-footer">
+      <a href="{end_url}" target="_self" rel="noopener noreferrer">🧾 상담 종료</a>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
 # 카테고리 버튼
 st.markdown('<p class="category-title">📂 어떤 분야가 궁금하세요?</p>', unsafe_allow_html=True)
 
@@ -242,10 +375,18 @@ if st.session_state.category:
         </div>
         """, unsafe_allow_html=True)
     
-    # 예상 질문 섹션
     st.markdown("### 💡 이런 질문을 해보세요")
     
     for policy in cat_data["policies"]:
+
+        # =========================
+        # ✅ 업데이트 by Dayforged (보고서 기능) - 추가 시작
+        if st.session_state.chat_ended:
+            st.info("상담이 종료되었습니다. 하단의 보고서 섹션을 확인해 주세요.")
+            break
+        # ✅ 업데이트 by Dayforged (보고서 기능) - 추가 끝
+        # =========================
+
         if st.button(f"👉 {policy['question']}", key=f"q_{policy['name']}"):
             with st.chat_message("user"):
                 st.markdown(policy['question'])
@@ -258,9 +399,9 @@ if st.session_state.category:
                             "http://127.0.0.1:8000/chat",
                             json={
                                 "message": policy['question'],
-                                "user_id": user_id  # ⭐ 추가
+                                "user_id": user_id
                             },
-                            timeout=180  # ⭐ 60 → 180
+                            timeout=180
                         )
                         answer = response.json().get("answer", "오류가 발생했습니다.")
                     except:
@@ -270,7 +411,6 @@ if st.session_state.category:
     
     st.markdown("---")
     
-    # 뒤로가기 버튼
     if st.button("⬅️ 카테고리 다시 선택"):
         st.session_state.category = None
         st.rerun()
@@ -282,11 +422,17 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# 자동 질문 처리 (정책 클릭 시)
-if st.session_state.selected_question:
-    prompt = st.session_state.selected_question
-    st.session_state.selected_question = None
-    
+# 사용자 직접 입력
+if prompt := st.chat_input("💬 질문을 입력하세요..."):
+
+    # =========================
+    # ✅ 업데이트 by Dayforged (보고서 기능) - 추가 시작
+    if st.session_state.chat_ended:
+        st.warning("상담이 종료되었습니다. 보고서를 확인해 주세요.")
+        st.stop()
+    # ✅ 업데이트 by Dayforged (보고서 기능) - 추가 끝
+    # =========================
+
     with st.chat_message("user"):
         st.markdown(prompt)
     st.session_state.messages.append({"role": "user", "content": prompt})
@@ -298,9 +444,9 @@ if st.session_state.selected_question:
                     "http://127.0.0.1:8000/chat",
                     json={
                         "message": prompt,
-                        "user_id": user_id  # ⭐ 추가
+                        "user_id": user_id
                     },
-                    timeout=180  # ⭐ 60 → 180
+                    timeout=180
                 )
                 answer = response.json().get("answer", "오류가 발생했습니다.")
             except:
@@ -308,28 +454,32 @@ if st.session_state.selected_question:
             st.markdown(answer)
     st.session_state.messages.append({"role": "assistant", "content": answer})
 
-# 사용자 직접 입력
-if prompt := st.chat_input("💬 질문을 입력하세요..."):
-    with st.chat_message("user"):
-        st.markdown(prompt)
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    
-    with st.chat_message("assistant"):
-        with st.spinner("🤔 답변 생성 중..."):
-            try:
-                response = requests.post(
-                    "http://127.0.0.1:8000/chat",
-                    json={
-                        "message": prompt,
-                        "user_id": user_id  # ⭐ 추가
-                    },
-                    timeout=180  # ⭐ 60 → 180
-                )
-                answer = response.json().get("answer", "오류가 발생했습니다.")
-            except:
-                answer = "❌ 서버 연결에 실패했습니다."
-            st.markdown(answer)
-    st.session_state.messages.append({"role": "assistant", "content": answer})
+
+# =========================
+# ✅ 업데이트 by Dayforged (보고서 기능) - 추가 시작
+# - 상담 종료 후: 페이지 하단에 iframe으로 보고서 화면 표시 (FastAPI /report/view_by_id)
+# =========================
+if st.session_state.chat_ended:
+    st.markdown("---")
+    st.subheader("상담 결과 기반 정책 전략 가이드")
+
+    if st.session_state.report_id:
+        # ✅ 보고서 관련 코드 (업데이트 by dayforged) - 추가 시작
+        # report_id를 URL-safe하게 인코딩 (공백/특수문자 대비)
+        safe_report_id = quote(str(st.session_state.report_id), safe="")
+        view_url = f"http://127.0.0.1:8000/report/view_by_id?report_id={safe_report_id}"
+        # ✅ 보고서 관련 코드 (업데이트 by dayforged) - 추가 끝
+
+        components.iframe(view_url, height=920, scrolling=True)
+    else:
+        st.error("보고서 생성에 실패했습니다. 백엔드 서버(8000) 상태를 확인해 주세요.")
+
+    with st.expander("디버그(report_payload) 보기", expanded=False):
+        st.json(st.session_state.report_payload or {})
+# =========================
+# ✅ 업데이트 by Dayforged (보고서 기능) - 추가 끝
+# =========================
+
 
 # 사이드바
 with st.sidebar:
@@ -341,11 +491,18 @@ with st.sidebar:
     """)
     
     st.markdown("---")
-    
-    # ⭐ 추가: 디버그용 user_id 표시
     st.markdown(f"🆔 `{user_id[:8]}...`")
     
     if st.button("🗑️ 대화 초기화", use_container_width=True):
         st.session_state.messages = []
         st.session_state.category = None
+
+        # =========================
+        # ✅ 업데이트 by Dayforged (보고서 기능) - 추가 시작
+        st.session_state.chat_ended = False
+        st.session_state.report_payload = None
+        st.session_state.report_id = None
+        # ✅ 업데이트 by Dayforged (보고서 기능) - 추가 끝
+        # =========================
+
         st.rerun()

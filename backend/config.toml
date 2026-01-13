@@ -1,0 +1,3 @@
+# backend/.streamlit/config.toml
+[server]
+fileWatcherType = "poll"

@@ -1,0 +1,62 @@
+{
+  "session_id": "fe9e06d2-9bc3-4f88-8147-1fc1694d1f95",
+  "report": {
+    "header": "상담 결과 기반 정책 전략 가이드",
+    "timeline": [
+      {
+        "key": "NOW",
+        "title": "지금",
+        "policies": [
+          {
+            "policy_name": "국민취업지원제도",
+            "why_now": "NORMAL 기준으로 지금 신청 가능 여부부터 확인하세요.",
+            "benefit_type": "JOB",
+            "links": []
+          }
+        ]
+      },
+      {
+        "key": "PLUS_3M",
+        "title": "3개월 후",
+        "policies": [
+          {
+            "policy_name": "청년일자리도약장려금",
+            "why_now": "상태 미확인 상태에서 3개월 내 서류/조건을 정리하세요.",
+            "benefit_type": "JOB",
+            "links": []
+          }
+        ]
+      },
+      {
+        "key": "PLUS_6M",
+        "title": "6개월 후",
+        "policies": [
+          {
+            "policy_name": "(전략) 거주지 기준 추가 지원 탐색",
+            "why_now": "6개월 시점엔 중복/기간 제약을 확인하며 확장하세요.",
+            "benefit_type": "ETC",
+            "links": []
+          }
+        ]
+      }
+    ],
+    "strategy_summary": "- 지금 바로 신청 가능한 지원 제도부터 확인하세요. (예: 청년 교통비/생활비 계열)\n- 월세·주거·소득·중복수급 조건부터 확인하고, 제출 서류를 미리 준비해두세요.\n- 26년 1분기 무주택 청년 월세 한시 지원 재개 여부를 기억해두고 체크하세요."
+  },
+  "meta": {
+    "provider": "ollama_chatollama",
+    "model": "llama3.2",
+    "planner_used_llm": false,
+    "summary_used_llm": false,
+    "planner_error": "model 'llama3.2' not found (status code: 404)",
+    "summary_error": "model 'llama3.2' not found (status code: 404)",
+    "source": "log",
+    "user_id": null,
+    "limit": 0,
+    "sufficiency": {
+      "policy_mentions": 0,
+      "ok": true,
+      "forced": true
+    },
+    "mode": "REPORT"
+  }
+}

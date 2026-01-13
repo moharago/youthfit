@@ -1,0 +1,18 @@
+{
+  "session_id": "0846e758-8287-4f2e-8893-c5dfebab1beb",
+  "report": {
+    "header": "상담 요약",
+    "timeline": [],
+    "strategy_summary": "- 상담 기록을 바탕으로 주요 내용을 요약합니다.\n- 현재 확인된 정보: 사용자 정보 없음\n- 상담 결과(핵심):\n  1) 정책명/제도명이 2개 이상 언급되면 시간축 보고서를 생성합니다.\n  2) 현재는 정책 언급이 부족하거나 데이터 연결이 불안정할 수 있습니다.\n  3) 정책명을 2개 이상 포함해 다시 질문하면 보고서 포맷을 확인할 수 있어요."
+  },
+  "meta": {
+    "source": "log",
+    "user_id": null,
+    "limit": 0,
+    "sufficiency": {
+      "policy_mentions": 0,
+      "ok": false
+    },
+    "mode": "SUMMARY_ONLY"
+  }
+}

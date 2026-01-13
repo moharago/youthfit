@@ -4,21 +4,33 @@
 fastapi
 uvicorn
 
+# Streamlit UI (backend/app.py 실행용)
+streamlit
+
 # 인공지능 및 RAG 관련
 langchain==0.3.7
 langchain-community==0.3.5
 langchain-openai==0.2.6
 langchain-text-splitters==0.3.2
 openai
+tiktoken
 
-# 데이터 처리 및 DB
+# Ollama 연동 (backend/main.py에서 필요)
+langchain-ollama
 
+# Vector DB / Embedding (ingest.py에서 필요)
+chromadb
+sentence-transformers
+transformers
+
+# 데이터 처리
 pandas
 openpyxl
-chromadb
+pdfplumber
 python-dotenv
+requests
 
+# DB (database.py에서 필요)
+sqlalchemy
+pymysql
 
-
-# 기타 도구
-tiktoken

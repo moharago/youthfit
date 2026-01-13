@@ -1,6 +1,5 @@
+# backend/main.py
 # FastAPI 실행 및 앤드포인트 설정
-
-# main.py
 
 import os
 from fastapi import FastAPI
@@ -23,6 +22,20 @@ from user_service import (
 from database import get_user
 from router import route_question
 from clarify_service import format_clarify_message, should_force_clarify_for_eligibility
+
+
+# =========================
+# 업데이트 by Dayforged (보고서 기능) - 추가 시작
+# =========================
+from report.report_schema import ReportFromDBRequest
+from report.report_schema import ReportFromLogRequest
+from report.report_exporter import export_report_json, load_report_json
+from report.report_from_db_service import generate_report_from_db
+from report.report_from_db_service import generate_report_from_log
+from report.report_view import render_report_html
+# =========================
+# 업데이트 by Dayforged (보고서 기능) - 추가 끝
+# =========================
 
 
 # =========================
@@ -119,6 +132,7 @@ def get_user_info_text(user_id: str) -> str:
     
     return ", ".join(parts) if parts else "사용자 정보 없음"
 
+
 def run_rag(question: str, user_id: str) -> str:
     history = format_history(get_recent_chats(user_id))
     user_info = get_user_info_text(user_id)
@@ -207,12 +221,10 @@ async def chat(req: ChatRequest):
 
     # Router 흔들릴 때 대비: 판정형 키워드가 강하면 강제 clarify
     if should_force_clarify_for_eligibility(message) and route_result["route"] == "RAG_DIRECT":
-        # profile이 비었으면 기본 missing 잡아도 됨(최소 질문)
         route_result["route"] = "ASK_CLARIFY"
         if not route_result.get("missing_fields"):
             route_result["missing_fields"] = ["region", "income_level", "unemployment_benefit"]
         route_result["reason"] = "판정형 질문(키워드) + 정보 부족 가능성"
-
 
     # 4-1) ASK_CLARIFY → clarify_service에서 질문 생성
     if route_result["route"] == "ASK_CLARIFY":
@@ -231,6 +243,57 @@ async def chat(req: ChatRequest):
     answer = run_rag(message, user_id)
     save_chat(user_id, "assistant", answer)
     return {"answer": answer}
+
+
+# =========================
+# 업데이트 by Dayforged (보고서 기능) - 추가 시작
+# =========================
+
+# 1) JSON API: Streamlit/기타가 호출
+@app.post("/report/from_db")
+async def report_from_db(req: ReportFromDBRequest):
+    resp = generate_report_from_db(req)
+    return resp.model_dump()
+
+
+# 2) HTML View: Streamlit iframe이 표시할 "보고서 화면"
+@app.get("/report/view")
+async def report_view(user_id: str, limit: int = 30):
+    req = ReportFromDBRequest(
+        session_id=user_id,  # MVP: session_id는 user_id로 대체
+        user_id=user_id,
+        limit=limit,
+        extracted_facts=None,
+    )
+    resp = generate_report_from_db(req).model_dump()
+    return render_report_html(resp)
+
+
+# 3) LOG 기반: Streamlit 세션 로그로 보고서 생성 + report_id 반환(파일 저장)
+@app.post("/report/from_log")
+async def report_from_log(req: ReportFromLogRequest):
+    resp = generate_report_from_log(req).model_dump()
+
+    # ✅ 보고서 관련 코드 (업데이트 by dayforged) - 추가 시작
+    # Windows 경로/URL 깨짐 방지:
+    # - export_report_json은 "전체 경로"를 반환하므로
+    # - 클라이언트(Streamlit)에 반환하는 report_id는 "파일명만" 전달
+    saved_path = export_report_json(session_id=req.session_id, payload=resp)
+    report_id = os.path.basename(saved_path)
+    # ✅ 보고서 관련 코드 (업데이트 by dayforged) - 추가 끝
+
+    return {"report_id": report_id, "payload": resp}
+
+
+# 4) LOG HTML View: report_id로 파일 로드 후 HTML 렌더
+@app.get("/report/view_by_id")
+async def report_view_by_id(report_id: str):
+    payload = load_report_json(report_id)
+    return render_report_html(payload)
+
+# =========================
+# 업데이트 by Dayforged (보고서 기능) - 추가 끝
+# =========================
 
 
 if __name__ == "__main__":

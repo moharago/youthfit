@@ -64,12 +64,26 @@ class ReportRequest(BaseModel):
     extracted_facts: Optional[dict] = Field(None, description="상담 로그에서 추출된 핵심 사실(옵션)")
 
 
-# ✅ NEW: DB에서 채팅 기록을 끌어와 보고서 생성할 때 쓰는 요청
+# ✅ DB에서 채팅 기록을 끌어와 보고서 생성할 때 쓰는 요청
 class ReportFromDBRequest(BaseModel):
     session_id: str = Field(..., description="세션 식별자(프론트에서 생성 가능)")
     user_id: str = Field(..., description="DB에 저장된 user_id")
     limit: int = Field(30, description="최근 대화 몇 개를 보고서에 쓸지(기본 30)")
     extracted_facts: Optional[dict] = Field(None, description="추출 사실(옵션)")
+
+
+# =========================
+# ✅ 업데이트 by Dayforged - 추가 시작
+# 파일/프론트에서 "로그 자체"를 보내서 보고서 생성할 때 쓰는 요청
+# - DB가 꼬여도 보고서 UI를 즉시 검증할 수 있음
+# =========================
+class ReportFromLogRequest(BaseModel):
+    session_id: str = Field(..., description="세션 식별자(프론트에서 생성 가능)")
+    chat_log: List[ChatMessage] = Field(..., description="프론트/파일에서 전달된 상담 로그")
+    extracted_facts: Optional[dict] = Field(None, description="추출 사실(옵션)")
+# =========================
+# ✅ 업데이트 by Dayforged - 추가 끝
+# =========================
 
 
 class ReportResponse(BaseModel):
