@@ -74,11 +74,19 @@ prompt = ChatPromptTemplate.from_template("""
 
     [질문]
     {question}
+                                          
+    📢 답변 필수 지침 (매우 중요):
+    1. 답변을 시작할 때, [사용자 정보]에 저장된 내용을 바탕으로 사용자의 현재 상황을 먼저 언급하세요.
+       예: "현재 {user_info} 상황이시군요. 이에 맞는 정책을 안내해 드릴게요." 
+       (만약 정보가 아예 없다면 이 단계는 생략합니다.)
+
+    2. 그 다음, [정책 정보]에 있는 내용 중 사용자 조건에 가장 잘 맞는 정책을 추천하세요.
 
     ⛔ 절대 규칙:
     1. [정책 정보]에 있는 내용만 답변하세요.
     2. 없는 정책은 절대 언급 금지!
     3. 반드시 한국어로만 답변하세요.
+    4. 위치, 목록, 전체를 묻는 질문이면 [정책 정보]에 있는 모든 항목을 나열하세요.
 
     ⚠️ 추천 관련 규칙 (매우 중요):
     1. 사용자 조건이 정책의 필수 요건을 모두 충족한다고 확인되지 않으면:
@@ -92,6 +100,11 @@ prompt = ChatPromptTemplate.from_template("""
     - 정책 소개
     - 필수 조건 안내
     - 사용자가 확인해야 할 추가 조건 명시
+                                          
+    4. 답변 형식:
+    - [사용자 상황 요약] (예: 거주지, 나이, 취업여부 등 언급)
+    - [맞춤 정책 추천]
+    - [필수 조건 및 추가 확인 사항]
     """
 )
 
@@ -102,6 +115,7 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -109,7 +123,7 @@ app.add_middleware(
 
 class ChatRequest(BaseModel):
     message: str
-    user_id: Optional[str] = "guest"
+    user_id: str
 
 
 def get_user_info_text(user_id: str) -> str:
@@ -137,11 +151,41 @@ def run_rag(question: str, user_id: str) -> str:
     history = format_history(get_recent_chats(user_id))
     user_info = get_user_info_text(user_id)
 
-    docs = retriever.invoke(question)
+     # ✅ 목록/위치 질문 감지
+    list_keywords = ["어디", "위치", "목록", "전체", "모든", "다 알려", "뭐뭐 있어", "몇 개", "리스트"]
+    is_list_question = any(kw in question for kw in list_keywords)
+    
+    # ✅ 목록 질문이면 더 많이 검색
+    k_value = 10 if is_list_question else 3
+    docs = vectorstore.similarity_search(question, k=k_value)
+
+    # ✅ 디버깅 로그 추가
+    print("\n" + "="*60)
+    print(f"🔍 RAG 검색 쿼리: {question}")
+    print(f"📄 검색된 문서 수: {len(docs)}")
+    print("="*60)
+    
+    for i, doc in enumerate(docs):
+        print(f"\n--- Document {i+1} ---")
+        print(f"📝 내용:\n{doc.page_content[:500]}...")  # 앞 500자
+        if hasattr(doc, 'metadata') and doc.metadata:
+            print(f"🏷️ 메타데이터: {doc.metadata}")
+        print("-"*40)
+    
+    print("="*60 + "\n")
+    # ✅ 디버깅 로그 끝
+
     if not docs:
         return "관련 정책 정보를 찾을 수 없습니다."
 
     context = "\n\n".join(d.page_content for d in docs)
+
+    # ✅ 목록 질문이면 프롬프트 수정
+    if is_list_question:
+        modified_question = f"{question}\n\n※ 검색된 모든 항목의 이름과 위치를 목록으로 정리해서 알려주세요."
+    else:
+        modified_question = question
+
     chain = prompt | llm | StrOutputParser()
 
     return chain.invoke({
@@ -221,6 +265,7 @@ async def chat(req: ChatRequest):
 
     # Router 흔들릴 때 대비: 판정형 키워드가 강하면 강제 clarify
     if should_force_clarify_for_eligibility(message) and route_result["route"] == "RAG_DIRECT":
+        # profile이 비었으면 기본 missing 잡아도 됨(최소 질문)
         route_result["route"] = "ASK_CLARIFY"
         if not route_result.get("missing_fields"):
             route_result["missing_fields"] = ["region", "income_level", "unemployment_benefit"]

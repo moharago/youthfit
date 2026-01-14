@@ -20,80 +20,177 @@ user_id = st.session_state.user_id
 # 커스텀 CSS
 st.markdown("""
 <style>
+    /* =========================
+    # ✅ 업데이트 by Dayforged (색감/그라데이션 톤 변경) - 수정 시작
+    # - 기능/레이아웃/로직 변경 없음
+    # - 오프화이트/베이지 배경 + 보라/인디고 포인트 + 은은한 그라데이션만 적용
+    ========================= */
+
+    :root {
+        /* Background */
+        --bg0: #F7F5F1;           /* warm off-white */
+        --bg1: #F3F2EE;           /* slightly deeper warm gray */
+        --panel: rgba(255,255,255,0.72);
+
+        /* Text */
+        --text: rgba(17, 24, 39, 0.92);     /* near-black */
+        --muted: rgba(17, 24, 39, 0.62);
+
+        /* Border / shadow */
+        --border: rgba(17, 24, 39, 0.10);
+        --shadow: 0 14px 34px rgba(17, 24, 39, 0.10);
+
+        /* Accent (purple/indigo like reference) */
+        --accent0: #6D5EF7;       /* soft indigo-violet */
+        --accent1: #9A5CFF;       /* violet */
+        --accent2: #3D3BF2;       /* deep indigo */
+        --accentSoft: rgba(109, 94, 247, 0.14);
+        --accentBorder: rgba(109, 94, 247, 0.28);
+    }
+
     .stApp {
-        background: linear-gradient(135deg, #1e90ff 0%, #00bfff 100%);
+        background:
+          radial-gradient(900px 520px at 18% 12%, rgba(154, 92, 255, 0.10), transparent 62%),
+          radial-gradient(860px 520px at 82% 18%, rgba(61, 59, 242, 0.08), transparent 58%),
+          linear-gradient(135deg, var(--bg0) 0%, var(--bg1) 100%);
         background-attachment: fixed;
     }
     
     .main-title {
         text-align: center;
-        color: white;
+        color: #2D2A5D !important;  /* ⭐ 진한 보라색으로 변경 */
         font-size: 2.5rem;
-        font-weight: 700;
+        font-weight: 780;
         margin-bottom: 0.5rem;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        text-shadow: none;  /* ⭐ 그림자 제거 */
+        letter-spacing: -0.02em;
     }
     
     .sub-title {
         text-align: center;
-        color: rgba(255,255,255,0.9);
-        font-size: 1.1rem;
+        color: #4A4A6A;  /* ⭐ 진한 회색-보라로 변경 */
+        font-size: 1.05rem;
         margin-bottom: 2rem;
     }
     
+    /* Buttons */
     .stButton > button {
-        background: white;
-        color: #1e90ff;
-        border: 2px solid #1e90ff;
-        border-radius: 25px;
+        background: var(--panel);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 999px;
         padding: 10px 30px;
-        font-weight: 600;
-        box-shadow: 0 4px 15px rgba(30, 144, 255, 0.2);
-        transition: all 0.3s ease;
+        font-weight: 650;
+        box-shadow: 0 10px 24px rgba(17, 24, 39, 0.10);
+        transition: all 0.25s ease;
+        backdrop-filter: blur(8px);
     }
     
     .stButton > button:hover {
-        background: #1e90ff;
-        color: white;
+        background: linear-gradient(135deg, rgba(109, 94, 247, 0.16) 0%, rgba(154, 92, 255, 0.12) 55%, rgba(61, 59, 242, 0.12) 100%);
+        border-color: var(--accentBorder);
         transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(30, 144, 255, 0.4);
+        box-shadow: 0 16px 34px rgba(17, 24, 39, 0.14);
     }
     
-    section[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #1e90ff 0%, #00bfff 100%);
-    }
+    /* Sidebar */
+    # section[data-testid="stSidebar"] {
+    #     background:
+    #       radial-gradient(520px 340px at 20% 10%, rgba(154, 92, 255, 0.10), transparent 62%),
+    #       linear-gradient(180deg, rgba(255,255,255,0.70) 0%, rgba(243,242,238,0.84) 100%);
+    #     border-right: 1px solid var(--border);
+    # }
     
-    section[data-testid="stSidebar"] .stMarkdown {
-        color: white;
-    }
+    # section[data-testid="stSidebar"] .stMarkdown {
+    #     color: var(--text);
+    # }
     
+    /* Cards */
     .policy-card {
-        background: white;
-        border-radius: 15px;
+        background:
+          linear-gradient(180deg, rgba(255,255,255,0.76) 0%, rgba(255,255,255,0.58) 100%);
+        border: 1px solid var(--border);
+        border-radius: 16px;
         padding: 20px;
         margin: 10px 0;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(10px);
+        position: relative;
+        overflow: hidden;
+    }
+
+    /* subtle gradient sheen */
+    .policy-card::before {
+        content: "";
+        position: absolute;
+        inset: -2px;
+        background: radial-gradient(520px 220px at 20% 10%, rgba(154, 92, 255, 0.14), transparent 60%),
+                    radial-gradient(520px 220px at 80% 20%, rgba(61, 59, 242, 0.10), transparent 62%);
+        pointer-events: none;
     }
     
     .policy-title {
-        color: #1e90ff;
-        font-size: 1.2rem;
-        font-weight: 700;
+        color: var(--accent2);
+        font-size: 1.18rem;
+        font-weight: 780;
         margin-bottom: 10px;
+        position: relative;
+        z-index: 1;
     }
     
     .policy-desc {
-        color: #333;
+        color: var(--muted);
         font-size: 0.95rem;
+        position: relative;
+        z-index: 1;
     }
     
     .category-title {
-        color: white;
-        font-size: 1.2rem;
+        color: #2D2A5D;  /* ⭐ 진한 보라색으로 변경 */
+        font-size: 1.18rem;
         margin-bottom: 1rem;
+        letter-spacing: -0.01em;
     }
-</style>
-""", unsafe_allow_html=True)
+            
+    /* 카테고리 섹션 제목 (📚 교육 지원 정책) */
+    .stMarkdown h3 {
+        color: #2D2A5D !important;  /* ⭐ 추가 */
+    }
+
+    /* 💡 이런 질문을 해보세요 */
+    .stMarkdown h3 {
+        color: #2D2A5D !important;  /* ⭐ 추가 */
+    }
+
+    /* =========================
+    # ✅ 업데이트 by 은솔 (색감/그라데이션 톤 변경) - 수정 끝
+    ========================= */
+            
+    /* =========================
+   Chat message text color fix
+   ========================= */
+
+    /* 사용자 / 어시스턴트 말풍선 공통 텍스트 */
+    .stChatMessage,
+    .stChatMessage p,
+    .stChatMessage span,
+    .stChatMessage div,
+    .stChatMessage li {
+        color: #2D2A5D !important;
+    }
+
+    /* 마크다운 strong, code 등도 통일 */
+    .stChatMessage strong {
+        color: #2D2A5D !important;
+    }
+
+    .stChatMessage code {
+        color: #2D2A5D !important;
+        background: rgba(45, 42, 93, 0.08);
+    }
+    
+    </style>
+    """, unsafe_allow_html=True)
 
 # 카테고리별 정책 데이터
 CATEGORY_POLICIES = {
@@ -293,6 +390,12 @@ end_url = "?" + urlencode({"end": 1})
 st.markdown(
     f"""
     <style>
+      
+      /* =========================
+      # ✅ 업데이트 by 은솔 (색감/그라데이션 톤 변경: 상담 종료 버튼) - 수정 시작
+      # - 기능 변경 없음
+      ========================= */
+
       .report-fixed-footer {{
         position: fixed;
         left: 50%;
@@ -303,30 +406,38 @@ st.markdown(
 
       .report-fixed-footer a {{
         display: inline-block;
-        background: white;
-        color: #1e90ff;
-        border: 1px solid #1e90ff;
+        background: rgba(255,255,255,0.70);
+        color: rgba(17, 24, 39, 0.92);
+        border: 1px solid rgba(17, 24, 39, 0.10);
         border-radius: 999px;
 
         padding: 10px 13px;
         font-size: 0.95rem;
-        font-weight: 520;
+        font-weight: 650;
         line-height: 1.0;
 
-        box-shadow: 0 6px 14px rgba(0,0,0,0.16);
+        box-shadow: 0 14px 28px rgba(17, 24, 39, 0.14);
         text-decoration: none;
         white-space: nowrap;
+
+        backdrop-filter: blur(10px);
       }}
 
       .report-fixed-footer a:hover {{
-        background: #1e90ff;
-        color: white;
+        background: linear-gradient(135deg, rgba(109, 94, 247, 0.18) 0%, rgba(154, 92, 255, 0.14) 55%, rgba(61, 59, 242, 0.14) 100%);
+        border-color: rgba(109, 94, 247, 0.28);
+        color: rgba(17, 24, 39, 0.92);
       }}
 
       .stApp {{
         padding-bottom: 0px;
       }}
+
+      /* =========================
+      # ✅ 업데이트 by 은솔 (색감/그라데이션 톤 변경: 상담 종료 버튼) - 수정 끝
+      ========================= */
     </style>
+
 
     <div class="report-fixed-footer">
       <a href="{end_url}" target="_self" rel="noopener noreferrer">🧾 상담 종료</a>
@@ -375,6 +486,7 @@ if st.session_state.category:
         </div>
         """, unsafe_allow_html=True)
     
+    # 예상 질문 섹션
     st.markdown("### 💡 이런 질문을 해보세요")
     
     for policy in cat_data["policies"]:
@@ -411,6 +523,7 @@ if st.session_state.category:
     
     st.markdown("---")
     
+    # 뒤로가기 버튼
     if st.button("⬅️ 카테고리 다시 선택"):
         st.session_state.category = None
         st.rerun()
@@ -421,6 +534,32 @@ st.divider()
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
+
+# 자동 질문 처리 (정책 클릭 시)
+if st.session_state.selected_question:
+    prompt = st.session_state.selected_question
+    st.session_state.selected_question = None
+    
+    with st.chat_message("user"):
+        st.markdown(prompt)
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    
+    with st.chat_message("assistant"):
+        with st.spinner("🤔 답변 생성 중..."):
+            try:
+                response = requests.post(
+                    "http://127.0.0.1:8000/chat",
+                    json={
+                        "message": prompt,
+                        "user_id": user_id  # ⭐ 추가
+                    },
+                    timeout=180  # ⭐ 60 → 180
+                )
+                answer = response.json().get("answer", "오류가 발생했습니다.")
+            except:
+                answer = "❌ 서버 연결에 실패했습니다."
+            st.markdown(answer)
+    st.session_state.messages.append({"role": "assistant", "content": answer})
 
 # 사용자 직접 입력
 if prompt := st.chat_input("💬 질문을 입력하세요..."):
@@ -480,29 +619,31 @@ if st.session_state.chat_ended:
 # ✅ 업데이트 by Dayforged (보고서 기능) - 추가 끝
 # =========================
 
+# ⭐ 터미널에서만 확인 (화면에 안 보임)
+print(f"🆔 user_id: {user_id}")
 
 # 사이드바
-with st.sidebar:
-    st.markdown("## 🎯 사용 방법")
-    st.markdown("""
-    1. 카테고리 선택
-    2. 원하는 정책 클릭
-    3. 또는 직접 질문 입력
-    """)
+# with st.sidebar:
+#     st.markdown("## 🎯 사용 방법")
+#     st.markdown("""
+#     1. 카테고리 선택
+#     2. 원하는 정책 클릭
+#     3. 또는 직접 질문 입력
+#     """)
     
-    st.markdown("---")
-    st.markdown(f"🆔 `{user_id[:8]}...`")
+#     st.markdown("---")
+#     st.markdown(f"🆔 `{user_id[:8]}...`")
     
-    if st.button("🗑️ 대화 초기화", use_container_width=True):
-        st.session_state.messages = []
-        st.session_state.category = None
+#     if st.button("🗑️ 대화 초기화", use_container_width=True):
+#         st.session_state.messages = []
+#         st.session_state.category = None
 
-        # =========================
-        # ✅ 업데이트 by Dayforged (보고서 기능) - 추가 시작
-        st.session_state.chat_ended = False
-        st.session_state.report_payload = None
-        st.session_state.report_id = None
-        # ✅ 업데이트 by Dayforged (보고서 기능) - 추가 끝
-        # =========================
+#         # =========================
+#         # ✅ 업데이트 by Dayforged (보고서 기능) - 추가 시작
+#         st.session_state.chat_ended = False
+#         st.session_state.report_payload = None
+#         st.session_state.report_id = None
+#         # ✅ 업데이트 by Dayforged (보고서 기능) - 추가 끝
+#         # =========================
 
-        st.rerun()
+#         st.rerun()
