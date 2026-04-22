@@ -34,9 +34,4 @@ CREATE TABLE IF NOT EXISTS chat_history (
 CREATE INDEX IF NOT EXISTS idx_chat_history_user_id ON chat_history(user_id);
 CREATE INDEX IF NOT EXISTS idx_chat_history_timestamp ON chat_history(timestamp DESC);
 
--- =====================
--- 30일 지난 대화 이력 삭제
--- Supabase 대시보드 > SQL Editor에서 수동 실행
--- 또는 pg_cron 확장으로 자동화 가능
--- =====================
-DELETE FROM chat_history WHERE timestamp < NOW() - INTERVAL '30 days';
+-- ※ 30일 보존 정책 cleanup은 scripts/retention_cleanup.sql 참고
