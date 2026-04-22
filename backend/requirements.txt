@@ -27,5 +27,5 @@ requests
 
 # DB (database.py에서 필요)
 sqlalchemy
-pymysql
+psycopg2-binary
 
