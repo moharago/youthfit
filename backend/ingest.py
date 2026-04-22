@@ -4,7 +4,10 @@ import os
 import glob
 import shutil
 import pandas as pd
+from dotenv import load_dotenv
 from langchain_openai import OpenAIEmbeddings
+
+load_dotenv()
 from langchain_community.vectorstores import Chroma
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document

@@ -14,8 +14,8 @@ frontend/.next/
 frontend/dist/
 frontend/build/
 
-# Vector DB (로컬 생성 파일)
-backend/data/chroma_db/
+# 데이터 파일
+backend/data/
 
 # 보고서 출력물
 backend/report_exports/
