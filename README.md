@@ -62,7 +62,7 @@ youthfit/
 │   ├── suggestion_service.py# 후속 질문 추천
 │   ├── report/              # 정책 리포트 생성 모듈
 │   ├── data/
-│   │   ├── files/           # 원본 정책 문서 (CSV, PDF, Excel)
+│   │   ├── files/           # 원본 정책 문서 (CSV, TXT, PDF, Excel, JSON)
 │   │   └── chroma_db/       # 벡터 DB (로컬 생성, git 제외)
 │   └── requirements.txt
 ├── frontend/
@@ -83,12 +83,11 @@ youthfit/
 ```bash
 # .env 파일 생성 (backend/.env)
 OPENAI_API_KEY=sk-...
-MYSQL_HOST=localhost
-MYSQL_PORT=3306
-MYSQL_USER=root
-MYSQL_PASSWORD=
-MYSQL_DATABASE=youthfit
+DATABASE_URL=postgresql://postgres:[비밀번호]@[supabase-host]:5432/postgres
 ```
+
+> `DATABASE_URL`은 Supabase 대시보드 → Connect → Direct → URI에서 복사
+> 로컬에서는 Session pooler URL 사용, 배포 시 Direct connection URL 사용
 
 ### 백엔드
 

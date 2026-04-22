@@ -7,5 +7,5 @@
 4. ingest.py 실행해서 벡터 DB 재구축
 5. 완료 후 추가된 청크 수 알려줘
 
-지원 형식: CSV, TXT, PDF, Excel(.xlsx)
+지원 형식: CSV, TXT, PDF, Excel(.xlsx), JSON
 저장 위치: backend/data/files/
