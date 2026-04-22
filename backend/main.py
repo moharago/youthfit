@@ -7,8 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 
-from langchain_ollama import ChatOllama
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
@@ -41,13 +40,11 @@ from report.report_view import render_report_html
 # =========================
 # 벡터 DB
 # =========================
-hf_embeddings = HuggingFaceEmbeddings(
-    model_name="jhgan/ko-sroberta-multitask"
-)
+embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
 
 vectorstore = Chroma(
     persist_directory="./data/chroma_db",
-    embedding_function=hf_embeddings
+    embedding_function=embeddings
 )
 
 retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
@@ -55,7 +52,7 @@ retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
 # =========================
 # LLM
 # =========================
-llm = ChatOllama(model="gemma3:4b", temperature=0)
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
 # =========================
 # Prompt

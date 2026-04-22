@@ -15,13 +15,8 @@ langchain-text-splitters==0.3.2
 openai
 tiktoken
 
-# Ollama 연동 (backend/main.py에서 필요)
-langchain-ollama
-
-# Vector DB / Embedding (ingest.py에서 필요)
+# Vector DB (ingest.py에서 필요)
 chromadb
-sentence-transformers
-transformers
 
 # 데이터 처리
 pandas

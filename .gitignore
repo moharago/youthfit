@@ -1,0 +1,24 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.env
+
+# Node
+frontend/node_modules/
+frontend/.next/
+frontend/dist/
+frontend/build/
+
+# Vector DB (로컬 생성 파일)
+backend/data/chroma_db/
+
+# 보고서 출력물
+backend/report_exports/
+
+# Claude
+.claude/settings.local.json
