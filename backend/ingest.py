@@ -4,7 +4,7 @@ import os
 import glob
 import shutil
 import pandas as pd
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
@@ -13,13 +13,9 @@ def run_free_ingestion():
     data_folder = 'data/files'
     persist_directory = "./data/chroma_db"
     
-    # 1. 한국어 임베딩 모델 로드
-    print("⏳ 한국어 임베딩 모델 로딩 중...")
-    hf_embeddings = HuggingFaceEmbeddings(
-        model_name="jhgan/ko-sroberta-multitask",
-        model_kwargs={'device': 'cpu'},
-        encode_kwargs={'normalize_embeddings': True}
-    )
+    # 1. OpenAI 임베딩 모델 로드
+    print("⏳ OpenAI 임베딩 모델 로딩 중...")
+    embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
 
     all_documents = []
     
@@ -135,7 +131,7 @@ def run_free_ingestion():
     print(f"🚀 {len(texts)}개의 청크를 벡터 DB에 저장 중...")
     vectorstore = Chroma.from_documents(
         documents=texts,
-        embedding=hf_embeddings,
+        embedding=embeddings,
         persist_directory=persist_directory
     )
     print("✅ 벡터 DB 구축 완료!")
