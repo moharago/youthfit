@@ -36,6 +36,18 @@ frontend/
 
 ---
 
+## 브랜치 규칙
+
+- git 작업은 사용자가 직접 함 — Claude는 git 명령어 실행 금지
+- 브랜치는 작업 단위별로 생성
+  - `feat/` — 새 기능
+  - `fix/` — 버그 수정
+  - `chore/` — 설정, 패키지 등
+  - `docs/` — 문서
+- PR 생성 후 CodeRabbit 자동 리뷰 → 머지
+
+---
+
 ## 절대 하지 말 것
 
 - **git 명령어 절대 실행 금지** — commit, push, branch, merge 등 모든 git 작업은 사용자가 직접 함

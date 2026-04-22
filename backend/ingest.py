@@ -2,6 +2,7 @@
 
 import os
 import glob
+import json
 import shutil
 import pandas as pd
 from dotenv import load_dotenv
@@ -46,7 +47,41 @@ def run_free_ingestion():
             all_documents.append(Document(page_content=content, metadata=metadata))
     
     # =====================
-    # 2-2. TXT 파일 처리
+    # 2-2. JSON 파일 처리
+    # =====================
+    json_files = glob.glob(os.path.join(data_folder, '*.json'))
+
+    for file_path in json_files:
+        print(f"📄 JSON 처리 중: {os.path.basename(file_path)}")
+        with open(file_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        policies = data.get("policies", [])
+        for policy in policies:
+            content = "\n".join([
+                f"정책명: {policy.get('policy_name', '')}",
+                f"분야: {policy.get('policy_category_large', '')} > {policy.get('policy_category_mid', '')}",
+                f"지역: {policy.get('region_name', '')}",
+                f"대상 나이: {policy.get('target_age_min', '')}~{policy.get('target_age_max', '')}세",
+                f"취업상태: {policy.get('target_employment_status', '')}",
+                f"소득기준: {policy.get('target_income_level', '')}",
+                f"요약: {policy.get('summary', '')}",
+                f"지원내용: {policy.get('support_content', '')}",
+                f"신청방법: {policy.get('application_method', '')}",
+                f"담당기관: {policy.get('agency_name', '')}",
+                f"키워드: {', '.join(policy.get('keywords', []))}",
+            ])
+            metadata = {
+                "source": os.path.basename(file_path),
+                "type": "json",
+                "policy_id": policy.get("policy_id", ""),
+                "region": policy.get("region_name", ""),
+                "category": policy.get("policy_category_large", ""),
+            }
+            all_documents.append(Document(page_content=content, metadata=metadata))
+
+    # =====================
+    # 2-3. TXT 파일 처리
     # =====================
     txt_files = [f for f in glob.glob(os.path.join(data_folder, '*.txt'))
                  if not os.path.basename(f).startswith('~$')]
@@ -109,6 +144,7 @@ def run_free_ingestion():
         return
     
     print(f"\n📊 처리 결과:")
+    print(f"   - JSON 파일: {len(json_files)}개")
     print(f"   - CSV 파일: {len(csv_files)}개")
     print(f"   - TXT 파일: {len(txt_files)}개")
     print(f"   - PDF 파일: {len(pdf_files)}개")
