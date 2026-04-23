@@ -2,6 +2,7 @@
 # FastAPI 실행 및 앤드포인트 설정
 
 import os
+import uuid
 import json as _json
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -204,15 +205,17 @@ async def _stream_static(text: str, user_id: str, conversation_id: Optional[str]
         save_chat(user_id, "assistant", text, conversation_id)
 
 
-def _rag_stream_response(question: str, user_id: str, conversation_id: str = None) -> StreamingResponse:
+def _rag_stream_response(question: str, user_id: str, conversation_id: Optional[str] = None,
+                         headers: Optional[Dict[str, Any]] = None) -> StreamingResponse:
     """RAG 검색 후 스트리밍 응답 생성"""
+    h = headers or SSE_HEADERS
     docs, context, q = _get_rag_context(question)
 
     if not docs:
         return StreamingResponse(
             _stream_static("관련 정책 정보를 찾을 수 없습니다.", user_id, conversation_id),
             media_type="text/event-stream",
-            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+            headers=h
         )
 
     history = format_history(get_recent_chats(user_id, conversation_id=conversation_id))
@@ -222,7 +225,7 @@ def _rag_stream_response(question: str, user_id: str, conversation_id: str = Non
     return StreamingResponse(
         _stream_llm(chain_input, user_id, conversation_id),
         media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+        headers=h
     )
 
 
@@ -250,11 +253,11 @@ SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
 async def chat(req: ChatRequest):
     user_id = req.user_id
     message = req.message.strip()
-    conv_id = req.conversation_id
+    conv_id = req.conversation_id or str(uuid.uuid4())
+    sse_headers = {**SSE_HEADERS, "X-Conversation-Id": conv_id}
 
-    # 대화 세션 생성 (없으면 자동 생성)
-    if conv_id:
-        create_conversation(conv_id, user_id)
+    # 대화 세션 생성
+    create_conversation(conv_id, user_id)
 
     # 1️⃣ 정보 추출 + 저장
     extracted = process_and_save(user_id, message, llm, conv_id)
@@ -263,7 +266,7 @@ async def chat(req: ChatRequest):
     # 2) 관련 없는 질문 거절
     if is_unrelated(message):
         answer = "죄송하지만, 저는 청년정책 안내 전문 챗봇이에요. 청년정책에 대해 질문해주세요! 😊"
-        return StreamingResponse(_stream_static(answer, user_id, conv_id), media_type="text/event-stream", headers=SSE_HEADERS)
+        return StreamingResponse(_stream_static(answer, user_id, conv_id), media_type="text/event-stream", headers=sse_headers)
 
     # 3) 정보만 제공한 경우 → 조건 기반 추천
     if extracted and is_info_only(message):
@@ -287,10 +290,10 @@ async def chat(req: ChatRequest):
                 "history": history,
                 "user_info": user_info
             }
-            return StreamingResponse(_stream_llm(chain_input, user_id, conv_id), media_type="text/event-stream", headers=SSE_HEADERS)
+            return StreamingResponse(_stream_llm(chain_input, user_id, conv_id), media_type="text/event-stream", headers=sse_headers)
         else:
             answer = f"정보 저장했어요! ({extracted}) 관련 정책을 찾아볼게요. 어떤 분야가 궁금하세요? (취업/주거/금융/창업)"
-            return StreamingResponse(_stream_static(answer, user_id, conv_id), media_type="text/event-stream", headers=SSE_HEADERS)
+            return StreamingResponse(_stream_static(answer, user_id, conv_id), media_type="text/event-stream", headers=sse_headers)
 
     # 4) Router 판단
     user_profile = get_user(user_id) or {}
@@ -317,16 +320,16 @@ async def chat(req: ChatRequest):
         return StreamingResponse(
             _stream_static(payload["text"], user_id, conv_id, {"clarify": payload["clarify"]}),
             media_type="text/event-stream",
-            headers=SSE_HEADERS
+            headers=sse_headers
         )
 
     # 4-2) RAG_REWRITE
     if route_result["route"] == "RAG_REWRITE":
         rq = route_result.get("rewrite_question") or message
-        return _rag_stream_response(rq, user_id, conv_id)
+        return _rag_stream_response(rq, user_id, conv_id, headers=sse_headers)
 
     # 4-3) RAG_DIRECT
-    return _rag_stream_response(message, user_id, conv_id)
+    return _rag_stream_response(message, user_id, conv_id, headers=sse_headers)
 
 
 # =========================

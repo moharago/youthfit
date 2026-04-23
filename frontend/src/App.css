@@ -370,7 +370,8 @@ body, html, #root {
 }
 
 .clarify-inline-input input {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
   border: 1.5px solid rgba(74, 143, 232, 0.35);
   border-radius: 999px;
   padding: 7px 14px;
@@ -424,6 +425,12 @@ body, html, #root {
 
 .input-bar input::placeholder {
   color: #bbc;
+}
+
+.input-bar input:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(74, 143, 232, 0.45);
+  border-radius: 4px;
 }
 
 .send-btn {
