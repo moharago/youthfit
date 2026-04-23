@@ -34,7 +34,7 @@
 
 ## 시스템 아키텍처
 
-```
+```text
 사용자 (브라우저)
     ↓
 React + Vite (Vercel)
@@ -50,7 +50,7 @@ FastAPI (Railway)
 
 ## 프로젝트 구조
 
-```
+```text
 youthfit/
 ├── backend/
 │   ├── main.py              # FastAPI 서버 & 엔드포인트

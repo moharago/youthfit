@@ -242,7 +242,7 @@ body, html, #root {
   font-size: 0.88rem;
   line-height: 1.55;
   word-break: keep-all;
-  word-wrap: break-word;
+  overflow-wrap: break-word;
   white-space: pre-wrap;
 }
 

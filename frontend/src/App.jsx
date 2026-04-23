@@ -162,6 +162,7 @@ function App() {
         body: JSON.stringify({ message: question, user_id: userId, conversation_id: conversationId }),
       });
 
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
@@ -194,10 +195,13 @@ function App() {
                 return updated;
               });
             }
-          } catch {}
+          } catch (e) {
+            console.error("SSE parse error:", e);
+          }
         }
       }
-    } catch {
+    } catch (e) {
+      console.error("Fetch error:", e);
       setMessages(prev => {
         const updated = [...prev];
         const last = updated[updated.length - 1];
@@ -418,7 +422,7 @@ function App() {
           <p className="section-label">이런 질문은 어떠세요?</p>
           <div className="quick-grid">
             {questions.map((q, i) => (
-              <button key={i} className="quick-chip" onClick={() => askQuestion(q)}>
+              <button key={i} className="quick-chip" onClick={() => !isLoading && askQuestion(q)} disabled={isLoading}>
                 {q}
               </button>
             ))}

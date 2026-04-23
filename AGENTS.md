@@ -20,7 +20,7 @@
 
 ## 폴더 구조 핵심
 
-```
+```text
 backend/
 ├── main.py          # FastAPI 엔드포인트, LLM/임베딩 초기화
 ├── router.py        # 질문 분류 (ASK_CLARIFY / RAG_REWRITE / RAG_DIRECT)

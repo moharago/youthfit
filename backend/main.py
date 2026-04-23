@@ -174,26 +174,34 @@ def _get_rag_context(question: str) -> tuple:
     return docs, context, q
 
 
-async def _stream_llm(chain_input: dict, user_id: str, conversation_id: str = None):
+async def _stream_llm(chain_input: dict, user_id: str, conversation_id: Optional[str] = None):
     """LLM 응답을 SSE 형식으로 스트리밍"""
     chain = prompt | llm | StrOutputParser()
     full = []
-    async for chunk in chain.astream(chain_input):
-        full.append(chunk)
-        yield f"data: {_json.dumps({'chunk': chunk}, ensure_ascii=False)}\n\n"
-    yield "data: [DONE]\n\n"
-    save_chat(user_id, "assistant", "".join(full), conversation_id)
+    try:
+        async for chunk in chain.astream(chain_input):
+            full.append(chunk)
+            yield f"data: {_json.dumps({'chunk': chunk}, ensure_ascii=False)}\n\n"
+    except Exception as e:
+        print(f"❌ LLM 스트리밍 오류: {e}")
+        yield f"data: {_json.dumps({'chunk': '답변 생성 중 오류가 발생했습니다.'}, ensure_ascii=False)}\n\n"
+    finally:
+        yield "data: [DONE]\n\n"
+        if full:
+            save_chat(user_id, "assistant", "".join(full), conversation_id)
 
 
-async def _stream_static(text: str, user_id: str, conversation_id: str = None,
+async def _stream_static(text: str, user_id: str, conversation_id: Optional[str] = None,
                          extra: Optional[Dict[str, Any]] = None):
     """고정 텍스트를 SSE 형식으로 반환"""
     payload = {"chunk": text}
     if extra:
         payload.update(extra)
-    yield f"data: {_json.dumps(payload, ensure_ascii=False)}\n\n"
-    yield "data: [DONE]\n\n"
-    save_chat(user_id, "assistant", text, conversation_id)
+    try:
+        yield f"data: {_json.dumps(payload, ensure_ascii=False)}\n\n"
+    finally:
+        yield "data: [DONE]\n\n"
+        save_chat(user_id, "assistant", text, conversation_id)
 
 
 def _rag_stream_response(question: str, user_id: str, conversation_id: str = None) -> StreamingResponse:
