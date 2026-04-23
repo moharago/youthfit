@@ -2,8 +2,10 @@
 # FastAPI 실행 및 앤드포인트 설정
 
 import os
+import json as _json
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 
@@ -17,10 +19,16 @@ from user_service import (
     save_chat,
     get_recent_chats,
     format_history,
+    _has_explicit_housing_statement,
 )
-from database import get_user
+from database import get_user, create_conversation
 from router import route_question
-from clarify_service import format_clarify_message, should_force_clarify_for_eligibility
+from clarify_service import (
+    format_clarify_payload,
+    get_personalized_policy_missing_fields,
+    should_force_clarify_for_eligibility,
+    should_force_clarify_for_personalized_policy,
+)
 
 
 # =========================
@@ -58,51 +66,34 @@ llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 # Prompt
 # =========================
 prompt = ChatPromptTemplate.from_template("""
-    당신은 청년정책 전문 상담사입니다.
+당신은 청년정책 전문 상담사입니다.
 
-    [사용자 정보]
-    {user_info}
+[사용자 정보]
+{user_info}
 
-    [이전 대화]
-    {history}
+[이전 대화]
+{history}
 
-    [정책 정보]
-    {context}
+[정책 정보]
+{context}
 
-    [질문]
-    {question}
-                                          
-    📢 답변 필수 지침 (매우 중요):
-    1. 답변을 시작할 때, [사용자 정보]에 저장된 내용을 바탕으로 사용자의 현재 상황을 먼저 언급하세요.
-       예: "현재 {user_info} 상황이시군요. 이에 맞는 정책을 안내해 드릴게요." 
-       (만약 정보가 아예 없다면 이 단계는 생략합니다.)
+[질문]
+{question}
 
-    2. 그 다음, [정책 정보]에 있는 내용 중 사용자 조건에 가장 잘 맞는 정책을 추천하세요.
+⛔ 절대 규칙 (반드시 지킬 것):
+1. [정책 정보]에 있는 내용만 답변하세요. 없는 정책은 절대 언급 금지.
+2. 반드시 한국어로만 답변하세요.
+3. [사용자 정보]가 "사용자 정보 없음"이면 사용자 상황 언급을 완전히 생략하고 바로 정책 안내만 하세요.
+   - "사용자 정보 없음 상황", "정보가 없으시군요" 같은 표현 절대 사용 금지.
+4. 사용자 조건이 확인되지 않으면 "추천합니다", "해당됩니다" 사용 금지.
+   대신 "신청 조건은 ~입니다", "추가 확인이 필요합니다" 사용.
 
-    ⛔ 절대 규칙:
-    1. [정책 정보]에 있는 내용만 답변하세요.
-    2. 없는 정책은 절대 언급 금지!
-    3. 반드시 한국어로만 답변하세요.
-    4. 위치, 목록, 전체를 묻는 질문이면 [정책 정보]에 있는 모든 항목을 나열하세요.
-
-    ⚠️ 추천 관련 규칙 (매우 중요):
-    1. 사용자 조건이 정책의 필수 요건을 모두 충족한다고 확인되지 않으면:
-    - "추천합니다", "해당됩니다", "지원받을 수 있습니다" 사용 금지!
-    - 대신 "적용 가능성이 있습니다", "추가 조건 확인이 필요합니다" 사용
-    
-    2. 소득, 무주택 여부, 취업 상태 등이 확인 안 됐으면:
-    - "해당 정책은 [미확인 조건]을 충족해야 신청 가능합니다" 라고 안내
-
-    3. 답변 형식:
-    - 정책 소개
-    - 필수 조건 안내
-    - 사용자가 확인해야 할 추가 조건 명시
-                                          
-    4. 답변 형식:
-    - [사용자 상황 요약] (예: 거주지, 나이, 취업여부 등 언급)
-    - [맞춤 정책 추천]
-    - [필수 조건 및 추가 확인 사항]
-    """
+📋 답변 형식:
+- 정책 소개 (1~2문장)
+- 주요 지원 내용
+- 신청 조건
+- 추가 확인 사항 (사용자 정보가 있을 때만)
+"""
 )
 
 # =========================
@@ -121,9 +112,18 @@ app.add_middleware(
 class ChatRequest(BaseModel):
     message: str
     user_id: str
+    conversation_id: Optional[str] = None
 
 
-def get_user_info_text(user_id: str) -> str:
+def _is_housing_policy_question(message: str) -> bool:
+    patterns = [
+        "전세자금", "전세 자금", "전세대출", "전세 대출", "전세지원", "전세 지원",
+        "월세지원", "월세 지원", "월세대출", "월세 대출", "전세 사기",
+    ]
+    return any(pattern in message for pattern in patterns)
+
+
+def get_user_info_text(user_id: str, current_message: str = "") -> str:
     """사용자 정보를 텍스트로 변환"""
     user = get_user(user_id)
     if not user:
@@ -138,59 +138,84 @@ def get_user_info_text(user_id: str) -> str:
         parts.append(f"취업상태: {user['job_status']}")
     if user.get("income_level"):
         parts.append(f"소득수준: {user['income_level']}")
-    if user.get("housing_type"):
+    should_include_housing = not (
+        current_message
+        and _is_housing_policy_question(current_message)
+        and not _has_explicit_housing_statement(current_message)
+    )
+    if user.get("housing_type") and should_include_housing:
         parts.append(f"주거형태: {user['housing_type']}")
     
     return ", ".join(parts) if parts else "사용자 정보 없음"
 
 
-def run_rag(question: str, user_id: str) -> str:
-    history = format_history(get_recent_chats(user_id))
-    user_info = get_user_info_text(user_id)
-
-     # ✅ 목록/위치 질문 감지
+def _get_rag_context(question: str) -> tuple:
+    """문서 검색 및 컨텍스트 반환 (동기)"""
     list_keywords = ["어디", "위치", "목록", "전체", "모든", "다 알려", "뭐뭐 있어", "몇 개", "리스트"]
     is_list_question = any(kw in question for kw in list_keywords)
-    
-    # ✅ 목록 질문이면 더 많이 검색
     k_value = 10 if is_list_question else 3
     docs = vectorstore.similarity_search(question, k=k_value)
 
-    # ✅ 디버깅 로그 추가
     print("\n" + "="*60)
     print(f"🔍 RAG 검색 쿼리: {question}")
     print(f"📄 검색된 문서 수: {len(docs)}")
-    print("="*60)
-    
     for i, doc in enumerate(docs):
         print(f"\n--- Document {i+1} ---")
-        print(f"📝 내용:\n{doc.page_content[:500]}...")  # 앞 500자
+        print(f"📝 내용:\n{doc.page_content[:500]}...")
         if hasattr(doc, 'metadata') and doc.metadata:
             print(f"🏷️ 메타데이터: {doc.metadata}")
-        print("-"*40)
-    
     print("="*60 + "\n")
-    # ✅ 디버깅 로그 끝
 
     if not docs:
-        return "관련 정책 정보를 찾을 수 없습니다."
+        return None, None, None
 
     context = "\n\n".join(d.page_content for d in docs)
+    q = f"{question}\n\n※ 검색된 모든 항목의 이름과 위치를 목록으로 정리해서 알려주세요." if is_list_question else question
+    return docs, context, q
 
-    # ✅ 목록 질문이면 프롬프트 수정
-    if is_list_question:
-        modified_question = f"{question}\n\n※ 검색된 모든 항목의 이름과 위치를 목록으로 정리해서 알려주세요."
-    else:
-        modified_question = question
 
+async def _stream_llm(chain_input: dict, user_id: str, conversation_id: str = None):
+    """LLM 응답을 SSE 형식으로 스트리밍"""
     chain = prompt | llm | StrOutputParser()
+    full = []
+    async for chunk in chain.astream(chain_input):
+        full.append(chunk)
+        yield f"data: {_json.dumps({'chunk': chunk}, ensure_ascii=False)}\n\n"
+    yield "data: [DONE]\n\n"
+    save_chat(user_id, "assistant", "".join(full), conversation_id)
 
-    return chain.invoke({
-        "question": question,
-        "context": context,
-        "history": history,
-        "user_info": user_info
-    })
+
+async def _stream_static(text: str, user_id: str, conversation_id: str = None,
+                         extra: Optional[Dict[str, Any]] = None):
+    """고정 텍스트를 SSE 형식으로 반환"""
+    payload = {"chunk": text}
+    if extra:
+        payload.update(extra)
+    yield f"data: {_json.dumps(payload, ensure_ascii=False)}\n\n"
+    yield "data: [DONE]\n\n"
+    save_chat(user_id, "assistant", text, conversation_id)
+
+
+def _rag_stream_response(question: str, user_id: str, conversation_id: str = None) -> StreamingResponse:
+    """RAG 검색 후 스트리밍 응답 생성"""
+    docs, context, q = _get_rag_context(question)
+
+    if not docs:
+        return StreamingResponse(
+            _stream_static("관련 정책 정보를 찾을 수 없습니다.", user_id, conversation_id),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+        )
+
+    history = format_history(get_recent_chats(user_id, conversation_id=conversation_id))
+    user_info = get_user_info_text(user_id, question)
+    chain_input = {"question": q, "context": context, "history": history, "user_info": user_info}
+
+    return StreamingResponse(
+        _stream_llm(chain_input, user_id, conversation_id),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+    )
 
 
 def is_info_only(message: str) -> bool:
@@ -210,22 +235,29 @@ def is_unrelated(message: str) -> bool:
     return any(u in message for u in unrelated)
 
 
+SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+
+
 @app.post("/chat")
 async def chat(req: ChatRequest):
     user_id = req.user_id
     message = req.message.strip()
+    conv_id = req.conversation_id
+
+    # 대화 세션 생성 (없으면 자동 생성)
+    if conv_id:
+        create_conversation(conv_id, user_id)
 
     # 1️⃣ 정보 추출 + 저장
-    extracted = process_and_save(user_id, message, llm)
+    extracted = process_and_save(user_id, message, llm, conv_id)
     print(f"📝 추출된 정보: {extracted}")
 
     # 2) 관련 없는 질문 거절
     if is_unrelated(message):
         answer = "죄송하지만, 저는 청년정책 안내 전문 챗봇이에요. 청년정책에 대해 질문해주세요! 😊"
-        save_chat(user_id, "assistant", answer)
-        return {"answer": answer}
+        return StreamingResponse(_stream_static(answer, user_id, conv_id), media_type="text/event-stream", headers=SSE_HEADERS)
 
-    # 3) 정보만 제공한 경우 → 조건 기반 추천(기존 기능 유지)
+    # 3) 정보만 제공한 경우 → 조건 기반 추천
     if extracted and is_info_only(message):
         search_query = ""
         if extracted.get("region"):
@@ -239,52 +271,54 @@ async def chat(req: ChatRequest):
         docs = retriever.invoke(search_query)
         if docs:
             context = "\n\n".join(d.page_content for d in docs)
-            history = format_history(get_recent_chats(user_id))
-            user_info = get_user_info_text(user_id)
-
-            chain = prompt | llm | StrOutputParser()
-            answer = chain.invoke({
+            history = format_history(get_recent_chats(user_id, conversation_id=conv_id))
+            user_info = get_user_info_text(user_id, message)
+            chain_input = {
                 "question": f"{extracted} 조건에 맞을 수 있는 청년 정책을 안내해줘. 단, 확정 추천은 금지하고 추가 확인사항을 같이 안내해줘.",
                 "context": context,
                 "history": history,
                 "user_info": user_info
-            })
+            }
+            return StreamingResponse(_stream_llm(chain_input, user_id, conv_id), media_type="text/event-stream", headers=SSE_HEADERS)
         else:
             answer = f"정보 저장했어요! ({extracted}) 관련 정책을 찾아볼게요. 어떤 분야가 궁금하세요? (취업/주거/금융/창업)"
+            return StreamingResponse(_stream_static(answer, user_id, conv_id), media_type="text/event-stream", headers=SSE_HEADERS)
 
-        save_chat(user_id, "assistant", answer)
-        return {"answer": answer}
-
-    # 4) Router 판단 (✅ 신규)
+    # 4) Router 판단
     user_profile = get_user(user_id) or {}
     route_result = route_question(message, user_profile, extracted, llm)
     print(f"🧭 ROUTER: {route_result}")
 
-    # Router 흔들릴 때 대비: 판정형 키워드가 강하면 강제 clarify
     if should_force_clarify_for_eligibility(message) and route_result["route"] == "RAG_DIRECT":
-        # profile이 비었으면 기본 missing 잡아도 됨(최소 질문)
         route_result["route"] = "ASK_CLARIFY"
         if not route_result.get("missing_fields"):
             route_result["missing_fields"] = ["region", "income_level", "unemployment_benefit"]
         route_result["reason"] = "판정형 질문(키워드) + 정보 부족 가능성"
 
-    # 4-1) ASK_CLARIFY → clarify_service에서 질문 생성
-    if route_result["route"] == "ASK_CLARIFY":
-        answer = format_clarify_message(route_result)
-        save_chat(user_id, "assistant", answer)
-        return {"answer": answer}
+    if (
+        route_result["route"] == "RAG_DIRECT"
+        and should_force_clarify_for_personalized_policy(message, user_profile)
+    ):
+        route_result["route"] = "ASK_CLARIFY"
+        route_result["missing_fields"] = get_personalized_policy_missing_fields(user_profile)
+        route_result["reason"] = "지역/나이 기반 개인화 정책 질문 + 핵심 정보 부족"
 
-    # 4-2) RAG_REWRITE → rewrite_question으로 RAG
+    # 4-1) ASK_CLARIFY
+    if route_result["route"] == "ASK_CLARIFY":
+        payload = format_clarify_payload(route_result)
+        return StreamingResponse(
+            _stream_static(payload["text"], user_id, conv_id, {"clarify": payload["clarify"]}),
+            media_type="text/event-stream",
+            headers=SSE_HEADERS
+        )
+
+    # 4-2) RAG_REWRITE
     if route_result["route"] == "RAG_REWRITE":
         rq = route_result.get("rewrite_question") or message
-        answer = run_rag(rq, user_id)
-        save_chat(user_id, "assistant", answer)
-        return {"answer": answer}
+        return _rag_stream_response(rq, user_id, conv_id)
 
-    # 4-3) RAG_DIRECT → 그대로 RAG
-    answer = run_rag(message, user_id)
-    save_chat(user_id, "assistant", answer)
-    return {"answer": answer}
+    # 4-3) RAG_DIRECT
+    return _rag_stream_response(message, user_id, conv_id)
 
 
 # =========================

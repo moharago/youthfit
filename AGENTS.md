@@ -1,4 +1,4 @@
-# YouthFit — Claude 작업 가이드
+# YouthFit — Codex 작업 가이드
 
 ## 프로젝트 한 줄 요약
 청년 정책 맞춤형 AI 상담 챗봇. RAG 기반으로 정책 문서만 활용해 환각 없이 답변.
@@ -45,7 +45,7 @@ frontend/
 
 ## 브랜치 규칙
 
-- git 작업은 사용자가 직접 함 — Claude는 git 명령어 실행 금지
+- git 작업은 사용자가 직접 함 — Codex는 git 명령어 실행 금지
 - 브랜치는 작업 단위별로 생성
   - `feat/` — 새 기능
   - `fix/` — 버그 수정
@@ -70,30 +70,14 @@ frontend/
 
 ---
 
-## DB 스키마 (Supabase)
-
-| 테이블 | 주요 컬럼 |
-|--------|-----------|
-| `users` | user_id, age, region, job_status, income_level, housing_type, interests |
-| `conversations` | conversation_id (uuid), user_id, title, started_at, last_message_at |
-| `messages` | message_id (uuid), conversation_id, user_id, role, content, message_type, metadata (jsonb), created_at |
-
-- `conversation_id`: 브라우저 로드마다 새로 생성 → localStorage 보관 → API 요청에 포함
-- LLM context 조회는 반드시 `conversation_id` 기준 (`get_chat_history`에 전달)
-- `messages.metadata`에 `extracted_info` jsonb로 저장
-
----
-
 ## 현재 진행 중인 작업 (배포 고도화)
 
 1. ✅ LLM: Ollama → OpenAI GPT-4o-mini 교체 완료
 2. ✅ 임베딩: HuggingFace → OpenAI text-embedding-3-small 교체 완료
 3. ✅ DB: MySQL → Supabase(PostgreSQL) 교체 완료
-4. ✅ Frontend: Vite + React UI 개편 완료 (카테고리·빠른질문·채팅 통합)
-5. ✅ DB 스키마: chat_history → messages 전환, conversations 세션 관리 추가
-6. ⬜ 실제 정책 데이터 수집 및 ingest
-7. ⬜ Backend 배포: Railway
-8. ⬜ Frontend 배포: Vercel
+4. ✅ Frontend: Vite + React 세팅 완료 (VITE_API_URL 환경변수 처리)
+5. ⬜ Backend 배포: Railway
+6. ⬜ Frontend 배포: Vercel
 
 ---
 
@@ -109,10 +93,9 @@ frontend/
 
 ---
 
-## 주요 코드 위치
+## 주요 LLM 관련 코드 위치
 
-- LLM 초기화: `backend/main.py` (`ChatOpenAI`, `OpenAIEmbeddings`)
-- 프롬프트: `backend/main.py` (`prompt = ChatPromptTemplate...`)
-- 라우터 프롬프트: `backend/router.py`
-- clarify 옵션 정의: `backend/clarify_service.py` (`FIELD_OPTIONS`)
-- 세션 생성/조회: `backend/database.py` (`create_conversation`, `get_chat_history`)
+- LLM 초기화: `backend/main.py` 58번째 줄 근처 (`ChatOpenAI`)
+- 임베딩 초기화: `backend/main.py` 44번째 줄 근처 (`OpenAIEmbeddings`)
+- 프롬프트: `backend/main.py` 63~109번째 줄
+- 라우터 프롬프트: `backend/router.py` 54~108번째 줄

@@ -23,7 +23,6 @@ engine = create_engine(
 
 
 def init_db():
-    """DB 연결 테스트"""
     try:
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
@@ -35,18 +34,16 @@ def init_db():
 
 
 # =====================
-# 사용자 정보 관련
+# 사용자 정보
 # =====================
 
 def get_user(user_id: str) -> Optional[Dict[str, Any]]:
-    """사용자 정보 조회"""
     with engine.connect() as conn:
         result = conn.execute(
             text("SELECT * FROM users WHERE user_id = :user_id"),
             {"user_id": user_id}
         )
         row = result.fetchone()
-
         if row:
             user = dict(row._mapping)
             if user.get("interests") and isinstance(user["interests"], str):
@@ -56,19 +53,16 @@ def get_user(user_id: str) -> Optional[Dict[str, Any]]:
 
 
 def create_user(user_id: str) -> Dict[str, Any]:
-    """새 사용자 생성"""
     with engine.connect() as conn:
         conn.execute(
             text("INSERT INTO users (user_id) VALUES (:user_id) ON CONFLICT DO NOTHING"),
             {"user_id": user_id}
         )
         conn.commit()
-
     return get_user(user_id) or {"user_id": user_id}
 
 
 def update_user(user_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
-    """사용자 정보 업데이트"""
     create_user(user_id)
 
     valid_fields = ["age", "region", "job_status", "income_level", "housing_type", "interests"]
@@ -80,8 +74,7 @@ def update_user(user_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
     if "interests" in filtered and isinstance(filtered["interests"], list):
         filtered["interests"] = json.dumps(filtered["interests"], ensure_ascii=False)
 
-    set_parts = [f"{k} = :{k}" for k in filtered.keys()]
-    set_clause = ", ".join(set_parts)
+    set_clause = ", ".join(f"{k} = :{k}" for k in filtered.keys())
 
     with engine.connect() as conn:
         conn.execute(
@@ -94,72 +87,109 @@ def update_user(user_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def get_missing_fields(user_id: str) -> List[str]:
-    """부족한 필수 정보 확인"""
     user = get_user(user_id)
     if not user:
         return ["age", "region", "job_status"]
-
-    required = ["age", "region", "job_status"]
-    return [field for field in required if not user.get(field)]
+    return [f for f in ["age", "region", "job_status"] if not user.get(f)]
 
 
 # =====================
-# 대화 기록 관련
+# 대화 세션
 # =====================
 
-def save_message(user_id: str, role: str, content: str, extracted_info: Dict = None):
-    """대화 저장"""
+def create_conversation(conversation_id: str, user_id: str) -> None:
     create_user(user_id)
-
-    extracted_json = json.dumps(extracted_info, ensure_ascii=False) if extracted_info else None
-
     with engine.connect() as conn:
         conn.execute(
             text("""
-                INSERT INTO chat_history (user_id, role, content, extracted_info)
-                VALUES (:user_id, :role, :content, :extracted_info)
+                INSERT INTO conversations (conversation_id, user_id, title)
+                VALUES (:conversation_id, :user_id, '새 상담')
+                ON CONFLICT DO NOTHING
             """),
-            {
-                "user_id": user_id,
-                "role": role,
-                "content": content,
-                "extracted_info": extracted_json
-            }
+            {"conversation_id": conversation_id, "user_id": user_id}
         )
         conn.commit()
 
 
-def get_chat_history(user_id: str, limit: int = 10) -> List[Dict[str, Any]]:
-    """최근 대화 기록 조회"""
+def update_conversation_timestamp(conversation_id: str) -> None:
     with engine.connect() as conn:
-        result = conn.execute(
+        conn.execute(
             text("""
-                SELECT role, content, timestamp
-                FROM chat_history
-                WHERE user_id = :user_id
-                ORDER BY timestamp DESC
-                LIMIT :limit
+                UPDATE conversations
+                SET last_message_at = NOW(), updated_at = NOW()
+                WHERE conversation_id = :conversation_id
             """),
-            {"user_id": user_id, "limit": limit}
+            {"conversation_id": conversation_id}
         )
+        conn.commit()
+
+
+# =====================
+# 메시지
+# =====================
+
+def save_message(user_id: str, role: str, content: str,
+                 conversation_id: Optional[str] = None,
+                 extracted_info: Optional[Dict] = None,
+                 message_type: str = "normal") -> None:
+    create_user(user_id)
+
+    metadata = {}
+    if extracted_info:
+        metadata["extracted_info"] = extracted_info
+
+    with engine.connect() as conn:
+        conn.execute(
+            text("""
+                INSERT INTO messages
+                    (conversation_id, user_id, role, content, message_type, metadata)
+                VALUES
+                    (:conversation_id, :user_id, :role, :content, :message_type, :metadata)
+            """),
+            {
+                "conversation_id": conversation_id,
+                "user_id": user_id,
+                "role": role,
+                "content": content,
+                "message_type": message_type,
+                "metadata": json.dumps(metadata, ensure_ascii=False),
+            }
+        )
+        conn.commit()
+
+    if conversation_id:
+        update_conversation_timestamp(conversation_id)
+
+
+def get_chat_history(user_id: str, limit: int = 10,
+                     conversation_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    """conversation_id가 있으면 해당 세션만, 없으면 user_id 기준 최근 메시지"""
+    with engine.connect() as conn:
+        if conversation_id:
+            result = conn.execute(
+                text("""
+                    SELECT role, content, created_at
+                    FROM messages
+                    WHERE conversation_id = :conversation_id
+                    ORDER BY created_at DESC
+                    LIMIT :limit
+                """),
+                {"conversation_id": conversation_id, "limit": limit}
+            )
+        else:
+            result = conn.execute(
+                text("""
+                    SELECT role, content, created_at
+                    FROM messages
+                    WHERE user_id = :user_id
+                    ORDER BY created_at DESC
+                    LIMIT :limit
+                """),
+                {"user_id": user_id, "limit": limit}
+            )
         rows = result.fetchall()
 
     return [dict(row._mapping) for row in reversed(rows)]
-
-
-def get_chat_context(user_id: str, limit: int = 5) -> str:
-    """LLM에 넣을 대화 컨텍스트 생성"""
-    history = get_chat_history(user_id, limit)
-
-    if not history:
-        return ""
-
-    context = "이전 대화:\n"
-    for msg in history:
-        role = "사용자" if msg["role"] == "user" else "챗봇"
-        context += f"{role}: {msg['content']}\n"
-
-    return context
 
 
 # 앱 시작 시 DB 연결 테스트

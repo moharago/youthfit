@@ -108,18 +108,38 @@ uvicorn main:app --reload --port 8000
 
 ```bash
 cd frontend
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
+
+> 로컬 개발 시 `frontend/.env.local` 파일 생성:
+> ```
+> VITE_API_URL=http://localhost:8000
+> ```
+
+---
+
+## DB 스키마
+
+Supabase(PostgreSQL) 테이블 구성:
+
+| 테이블 | 설명 |
+|--------|------|
+| `users` | 사용자 프로필 (나이·지역·취업상태·소득수준 등) |
+| `conversations` | 대화 세션 단위 관리 (세션별 LLM context 격리) |
+| `messages` | 메시지 저장 (role, content, message_type, metadata jsonb) |
+
+- `conversation_id`는 브라우저 로드 시 생성 → localStorage 보관
+- LLM context는 현재 `conversation_id` 기준으로만 조회 (세션 간 메시지 혼합 방지)
 
 ---
 
 ## 사용자 플로우
 
 1. 사용자가 챗봇에 질문 입력
-2. `user_id` 기반으로 사용자 정보 & 대화 이력 조회
+2. `user_id` + `conversation_id` 기반으로 사용자 정보 & 현재 세션 대화 이력 조회
 3. Router가 질문 유형 분류
-   - `ASK_CLARIFY` — 판정형 질문, 추가 정보 요청
+   - `ASK_CLARIFY` — 판정형 질문, 클릭형 인라인 UI로 추가 정보 수집
    - `RAG_REWRITE` — 모호한 질문, 검색어 재정의 후 RAG
    - `RAG_DIRECT` — 문서 기반 직접 검색
 4. ChromaDB에서 관련 정책 문서 검색
