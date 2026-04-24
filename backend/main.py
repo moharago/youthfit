@@ -616,19 +616,22 @@ async def chat(req: ChatRequest):
             return StreamingResponse(_stream_static(answer, user_id, conv_id), media_type="text/event-stream", headers=sse_headers)
 
     # 4) 후속 질문 여부 먼저 판단 (라우팅 오버라이드에 영향)
+    recent = get_recent_chats(user_id, conversation_id=conv_id)
+    prior_assistant_exists = any(chat["role"] == "assistant" for chat in recent)
     _BACK_REF = [
         "알려준", "방금", "위에서", "위의", "그 정책", "그거", "그것", "그걸",
         "거기", "그런 거", "그런거", "말한 거", "말씀하신", "저도", "나도",
         "그럼", "그러면", "그렇다면", "그니까", "그러니까", "아까",
     ]
-    is_back_ref = any(p in message for p in _BACK_REF) or len(message.strip()) <= 15
+    is_back_ref = any(p in message for p in _BACK_REF) or (
+        prior_assistant_exists and len(message.strip()) <= 15
+    )
 
     # 직전 대화에 특정 정책이 있고 자격 관련 질문이면 → 그 정책에 대한 후속 질문으로 처리
     # (예: "제주도 사는데 신청 가능한 건가요?", "제주도에 사는 사람도 신청 가능한가요?")
     if not is_back_ref and should_force_clarify_for_eligibility(message):
-        _recent_check = get_recent_chats(user_id, conversation_id=conv_id)
         # 최근 봇 메시지들을 순서대로 탐색해서 명확한 정책명 추출
-        for _chat in reversed(_recent_check):
+        for _chat in reversed(recent):
             if _chat["role"] == "assistant":
                 _topic = _extract_policy_topic(_chat["content"])
                 if _topic and len(_topic) > 2:
@@ -687,7 +690,6 @@ async def chat(req: ChatRequest):
     # 후속 질문: RAG 검색은 topic만 사용, LLM 질문은 원본 메시지 + 반복 금지 힌트
     rag_search_query = None
     if is_back_ref:
-        recent = get_recent_chats(user_id, conversation_id=conv_id)
         rag_search_query = _build_followup_search_query(message, recent)
 
     return _rag_stream_response(

@@ -116,7 +116,14 @@ def fetch_all():
                 print(f"📦 result 첫 번째 항목 필드: {list(result[0].keys())}")
             print()
 
-        result = data.get("result", {})
+        raw_result = data.get("result", {})
+        if isinstance(raw_result, list):
+            result = {"youthPolicyList": raw_result, "pagging": {}}
+        elif isinstance(raw_result, dict):
+            result = raw_result
+        else:
+            result = {}
+
         items = result.get("youthPolicyList", [])
         pagging = result.get("pagging", {})
         if not items:

@@ -64,10 +64,16 @@ def run_free_ingestion():
             "중소벤처기업부", "여성가족부", "기획재정부", "금융위원회",
         ]
 
+        def _safe_int(value):
+            try:
+                return int(value or 0)
+            except (TypeError, ValueError):
+                return 0
+
         for policy in policies:
             application_method = policy.get('application_method', '')
-            age_min = policy.get('target_age_min', 0) or 0
-            age_max = policy.get('target_age_max', 0) or 0
+            age_min = _safe_int(policy.get('target_age_min', 0))
+            age_max = _safe_int(policy.get('target_age_max', 0))
             age_str = "제한없음" if (age_min == 0 and age_max == 0) else f"{age_min}~{age_max}세"
 
             agency = policy.get('agency_name', '')
