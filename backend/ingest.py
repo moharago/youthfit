@@ -51,32 +51,55 @@ def run_free_ingestion():
     # =====================
     json_files = glob.glob(os.path.join(data_folder, '*.json'))
 
+    import re as _re
+
     for file_path in json_files:
         print(f"📄 JSON 처리 중: {os.path.basename(file_path)}")
         with open(file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
 
         policies = data.get("policies", [])
+        _NATIONAL_AGENCIES = [
+            "고용노동부", "보건복지부", "복지부", "국토교통부", "교육부",
+            "중소벤처기업부", "여성가족부", "기획재정부", "금융위원회",
+        ]
+
         for policy in policies:
+            application_method = policy.get('application_method', '')
+            age_min = policy.get('target_age_min', 0) or 0
+            age_max = policy.get('target_age_max', 0) or 0
+            age_str = "제한없음" if (age_min == 0 and age_max == 0) else f"{age_min}~{age_max}세"
+
+            agency = policy.get('agency_name', '')
+            is_national = any(a in agency for a in _NATIONAL_AGENCIES)
+            region_str = "전국 (지역 제한 없음, 전국 어디서나 신청 가능)" if is_national else policy.get('region_name', '')
+
             content = "\n".join([
                 f"정책명: {policy.get('policy_name', '')}",
                 f"분야: {policy.get('policy_category_large', '')} > {policy.get('policy_category_mid', '')}",
-                f"지역: {policy.get('region_name', '')}",
-                f"대상 나이: {policy.get('target_age_min', '')}~{policy.get('target_age_max', '')}세",
+                f"지역: {region_str}",
+                f"대상 나이: {age_str}",
                 f"취업상태: {policy.get('target_employment_status', '')}",
                 f"소득기준: {policy.get('target_income_level', '')}",
                 f"요약: {policy.get('summary', '')}",
                 f"지원내용: {policy.get('support_content', '')}",
-                f"신청방법: {policy.get('application_method', '')}",
-                f"담당기관: {policy.get('agency_name', '')}",
+                f"신청방법: {application_method}",
+                f"담당기관: {agency}",
                 f"키워드: {', '.join(policy.get('keywords', []))}",
             ])
+
+            # application_method에서 URL 추출
+            url_match = _re.search(r'https?://[^\s\)\]]+', application_method)
+            apply_url = url_match.group(0).rstrip('.,>)') if url_match else ''
+
             metadata = {
                 "source": os.path.basename(file_path),
                 "type": "json",
                 "policy_id": policy.get("policy_id", ""),
+                "policy_name": policy.get("policy_name", ""),
                 "region": policy.get("region_name", ""),
                 "category": policy.get("policy_category_large", ""),
+                "apply_url": apply_url,
             }
             all_documents.append(Document(page_content=content, metadata=metadata))
 
