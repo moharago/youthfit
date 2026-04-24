@@ -4,11 +4,9 @@ import json
 import re
 from typing import Dict, Any, List, Optional
 
+from profile_schema import ROUTER_MISSING_FIELDS
 
-MISSING_CANDIDATES = {
-    "age", "region", "job_status", "household_size", "income_level",
-    "unemployment_benefit", "recent_work_history", "student"
-}
+MISSING_CANDIDATES = set(ROUTER_MISSING_FIELDS)
 
 def _auto_reason(route: str, missing_fields: List[str]) -> str:
     """reason은 디버깅/로깅용이므로 코드에서 안정적으로 생성"""
@@ -63,6 +61,7 @@ def route_question(question: str, user_profile: Dict[str, Any], extracted: Optio
 [우선 규칙]
 - 사용자가 "가능/자격/대상/선발/몇유형/1유형/2유형/될까/신청해도" 같은 표현으로
   개인 판정(eligibility) 여부를 묻는 경우는 ASK_CLARIFY를 우선 고려한다.
+- user_profile 필드 값이 "모름"이면 이미 답변된 것이므로 missing_fields에 포함하지 않는다.
 
 [missing_fields 후보(이 목록에서만 선택)]
 - age
@@ -72,7 +71,6 @@ def route_question(question: str, user_profile: Dict[str, Any], extracted: Optio
 - income_level
 - unemployment_benefit
 - recent_work_history
-- student
 
 [분기 정의]
 1) RAG_DIRECT
@@ -133,6 +131,8 @@ JSON:
     # missing_fields 정리
     if not isinstance(missing_fields, list):
         missing_fields = []
+    else:
+        missing_fields = [field for field in missing_fields if field in MISSING_CANDIDATES]
 
     # RAG_REWRITE가 아니면 rewrite_question 무조건 None 처리
     if route != "RAG_REWRITE":

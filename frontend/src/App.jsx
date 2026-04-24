@@ -4,51 +4,51 @@ import "./App.css";
 
 const QUICK_QUESTIONS = {
   취업: [
-    "내게 맞는 일자리 지원금을 찾고 싶어",
-    "국민취업지원제도에 대해 알고 싶어",
-    "면접 컨설팅을 받을 수 있는 곳이 있어?",
-    "청년 내일채움공제 자격 요건은?",
-    "지역별 일자리 카페는 어디에 있어?",
-    "청년일자리도약장려금 신청 방법은?",
+    "청년 취업장려금 종류 알려주세요",
+    "국민취업지원제도에 대해 알고 싶어요",
+    "면접 컨설팅 받을 수 있는 곳 있나요?",
+    "청년 내일채움공제 자격 요건이 뭔가요?",
+    "청년 취업지원 프로그램 종류 알려주세요",
+    "일자리도약장려금 신청 방법은?",
   ],
   주거: [
-    "청년월세 지원 신청 방법은?",
-    "청년 전세자금 대출 조건이 뭐야?",
-    "행복주택 입주 자격이 어떻게 돼?",
-    "청년 주거급여 분리지급이 뭐야?",
-    "전세 사기 예방 방법 알려줘",
-    "청년 공공임대 신청 어떻게 해?",
+    "청년월세 지원 어떻게 신청하나요?",
+    "청년 전세자금 대출 조건이 뭔가요?",
+    "행복주택 입주 자격이 어떻게 되나요?",
+    "청년 주거급여 분리지급이 뭔가요?",
+    "전세보증금 반환보증 지원 알려주세요",
+    "청년 공공임대 어떻게 신청하나요?",
   ],
   금융: [
-    "청년도약계좌 가입 조건이 뭐야?",
-    "청년미래적금 만기 수령액은?",
-    "청년 저금리 신용대출 상품 알려줘",
-    "청년 내일저축계좌 신청 방법은?",
-    "소득 없어도 청년 금융 지원 받을 수 있어?",
-    "청년 금융 상품 비교해줘",
+    "청년도약계좌 가입 조건이 뭔가요?",
+    "청년 자산형성 지원 상품 알려주세요",
+    "취약계층 청년 금융 지원 있나요?",
+    "청년 내일저축계좌 어떻게 신청하나요?",
+    "소득 없어도 청년 금융 지원 되나요?",
+    "청년 금융 지원 종류 알려주세요",
   ],
   창업: [
-    "청년창업사관학교 지원 방법은?",
-    "청년 창업자금 대출 조건이 뭐야?",
-    "예비창업패키지 신청 방법 알려줘",
-    "창업 아이디어가 있는데 어디서 도움받아?",
-    "창업 공간 무료로 쓸 수 있는 곳 있어?",
-    "초기 창업자 지원금 종류 알려줘",
+    "청년창업사관학교 어떻게 지원하나요?",
+    "청년 창업자금 대출 조건이 뭔가요?",
+    "예비창업패키지 신청 방법 알려주세요",
+    "창업 초보, 어디서 도움받을 수 있나요?",
+    "무료 창업 공간 있나요?",
+    "초기 창업자 지원금 종류 알려주세요",
   ],
   교육: [
-    "국민내일배움카드 발급 방법은?",
-    "청년 해외취업 연수 프로그램 있어?",
-    "직업훈련 생계비 대출 알려줘",
-    "K-디지털 트레이닝 어떻게 신청해?",
-    "무료 직업훈련 과정 추천해줘",
-    "취업 준비 비용 지원해주는 정책 있어?",
+    "국민내일배움카드 어떻게 발급하나요?",
+    "청년 해외취업 연수 프로그램 있나요?",
+    "직업훈련 생계비 대출 알려주세요",
+    "K-디지털 트레이닝 어떻게 신청하나요?",
+    "무료 직업훈련 과정 추천해주세요",
+    "취업 준비 비용 지원 정책 있나요?",
   ],
   복지: [
-    "청년 심리상담 무료로 받을 수 있어?",
-    "청년 건강검진 어떻게 신청해?",
-    "청년 기초생활수급 조건이 뭐야?",
-    "1인 청년 가구 복지 지원 알려줘",
-    "청년 자립 지원 프로그램 있어?",
+    "청년 심리상담 무료로 받을 수 있나요?",
+    "청년 건강검진 어떻게 신청하나요?",
+    "청년 기초생활수급 조건이 뭔가요?",
+    "1인 청년 가구 복지 지원 알려주세요",
+    "청년 자립 지원 프로그램 있나요?",
     "청년 마음건강 바우처 신청 방법은?",
   ],
 };
@@ -105,8 +105,9 @@ const getStoredUserId = () => {
   return created;
 };
 
-// 새로고침마다 새 대화 세션 시작
-const initConversationId = () => {
+const getStoredConversationId = () => {
+  const existing = localStorage.getItem(CONV_ID_STORAGE_KEY);
+  if (existing) return existing;
   const created = uuidv4();
   localStorage.setItem(CONV_ID_STORAGE_KEY, created);
   return created;
@@ -133,7 +134,7 @@ const UserIcon = () => (
 
 function App() {
   const [userId] = useState(getStoredUserId);
-  const [conversationId] = useState(initConversationId);
+  const [conversationId] = useState(getStoredConversationId);
   const [category, setCategory] = useState("취업");
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -141,6 +142,7 @@ function App() {
   const [inlineInputs, setInlineInputs] = useState({});    // { field: string }
   const [inlineActive, setInlineActive] = useState({});    // { field: boolean }
   const [inlinePrefixes, setInlinePrefixes] = useState({}); // { field: prefix }
+  const [followupSelections, setFollowupSelections] = useState({}); // { msgIndex: Set<value> }
   const chatEndRef = useRef(null);
 
   useEffect(() => {
@@ -180,8 +182,8 @@ function App() {
           const data = line.slice(6);
           if (data === "[DONE]") continue;
           try {
-            const { chunk, clarify } = JSON.parse(data);
-            if (chunk || clarify) {
+            const { chunk, clarify, followup, links } = JSON.parse(data);
+            if (chunk || clarify || followup || links) {
               setMessages(prev => {
                 const updated = [...prev];
                 const last = updated[updated.length - 1];
@@ -190,6 +192,8 @@ function App() {
                     ...last,
                     content: chunk ? last.content + chunk : last.content,
                     clarify: clarify || last.clarify,
+                    followup: followup || last.followup,
+                    links: links || last.links,
                   };
                 }
                 return updated;
@@ -219,6 +223,8 @@ function App() {
     if (input.trim()) {
       askQuestion(input.trim());
       setInput("");
+      const ta = document.querySelector(".input-bar textarea");
+      if (ta) ta.style.height = "auto";
     }
   };
 
@@ -285,6 +291,61 @@ function App() {
     return (
       <>
         <span dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content) }} />
+        {msg.role === "assistant" && msg.links?.length > 0 && clarifyItems.length === 0 && (
+          <div className="link-buttons">
+            {msg.links.map((link, i) => (
+              <a key={i} href={link.url} target="_blank" rel="noopener noreferrer" className="link-btn">
+                {link.label} →
+              </a>
+            ))}
+          </div>
+        )}
+        {msg.role === "assistant" && msg.followup?.length > 0 && clarifyItems.length === 0 && !isLoading && (() => {
+          const selected = followupSelections[idx] || new Set();
+          const toggle = (value) => {
+            setFollowupSelections(prev => {
+              const next = new Set(prev[idx] || []);
+              next.has(value) ? next.delete(value) : next.add(value);
+              return { ...prev, [idx]: next };
+            });
+          };
+          const handleFollowupSend = () => {
+            const values = msg.followup
+              .filter(item => selected.has(item.value))
+              .map(item => item.value)
+              .join(". ");
+            if (values) askQuestion(values);
+          };
+          return (
+            <div className="followup-chips">
+              <div className="followup-chip-row">
+                {msg.followup.map((item, i) => (
+                  <button
+                    key={i}
+                    className={`followup-chip${selected.has(item.value) ? " selected" : ""}`}
+                    type="button"
+                    disabled={isLoading}
+                    onClick={() => toggle(item.value)}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              {selected.size > 0 && (
+                <div className="followup-chip-actions">
+                  <button
+                    className="followup-send"
+                    type="button"
+                    disabled={isLoading}
+                    onClick={handleFollowupSend}
+                  >
+                    전송
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })()}
         {msg.role === "assistant" && clarifyItems.length > 0 && (
           <div className="clarify-panel">
             {clarifyItems.map(item => {
@@ -351,7 +412,7 @@ function App() {
                             value={inlineInputs[item.field] || ""}
                             autoFocus
                             onChange={e => setInlineInputs(prev => ({ ...prev, [item.field]: e.target.value }))}
-                            onKeyDown={e => { if (e.key === "Enter") handleInlineConfirm(idx, item.field); }}
+                            onKeyDown={e => { if (e.key === "Enter" && !e.isComposing) handleInlineConfirm(idx, item.field); }}
                           />
                           <button
                             className="clarify-inline-confirm"
@@ -457,14 +518,24 @@ function App() {
           </div>
 
           <div className="input-bar">
-            <input
-
-              type="text"
-              placeholder="무엇이든 물어보세요"
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") handleSend(); }}
-            />
+            <div className="textarea-wrap">
+              {!input && <span className="textarea-placeholder">무엇이든 물어보세요</span>}
+              <textarea
+                rows={1}
+                value={input}
+                onChange={e => {
+                  setInput(e.target.value);
+                  e.target.style.height = "auto";
+                  e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
+                }}
+                onKeyDown={e => {
+                  if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                    e.preventDefault();
+                    handleSend();
+                  }
+                }}
+              />
+            </div>
             <button className="send-btn" onClick={handleSend} type="button">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="22" y1="2" x2="11" y2="13" />

@@ -11,7 +11,6 @@ FIELD_QUESTIONS: Dict[str, str] = {
     "income_level": "가구 소득이 중위소득 기준 어느 정도인지 아시나요? (60% 이하 / 100% 이하 / 잘 모르겠어요)",
     "unemployment_benefit": "현재 실업급여를 받고 계신가요? (예/아니오/모름)",
     "recent_work_history": "최근 1~2년 내 근로 이력이 있나요? (있음/없음/모름)",
-    "student": "현재 학생이신가요? (예/아니오)",
 }
 
 FIELD_OPTIONS: Dict[str, List[Dict[str, str]]] = {
@@ -46,10 +45,6 @@ FIELD_OPTIONS: Dict[str, List[Dict[str, str]]] = {
         {"label": "있어요", "value": "최근 1~2년 내 근로 이력이 있어요."},
         {"label": "없어요", "value": "최근 1~2년 내 근로 이력이 없어요."},
         {"label": "잘 모르겠어요", "value": "최근 근로 이력은 잘 모르겠어요."},
-    ],
-    "student": [
-        {"label": "학생이에요", "value": "현재 학생이에요."},
-        {"label": "학생 아니에요", "value": "현재 학생이 아니에요."},
     ],
     "household_size": [
         {"label": "1인", "value": "가구원 수는 1명이에요."},

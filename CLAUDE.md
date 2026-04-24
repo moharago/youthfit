@@ -10,7 +10,7 @@
 | 영역 | 기술 |
 |------|------|
 | Frontend | React + Vite (pnpm) → Vercel 배포 |
-| Backend | FastAPI → Railway 배포 |
+| Backend | FastAPI → AWS 배포 |
 | LLM | OpenAI GPT-4o-mini |
 | Embedding | OpenAI text-embedding-3-small |
 | Vector DB | ChromaDB (backend/data/chroma_db/) |
@@ -22,13 +22,19 @@
 
 ```
 backend/
-├── main.py          # FastAPI 엔드포인트, LLM/임베딩 초기화
-├── router.py        # 질문 분류 (ASK_CLARIFY / RAG_REWRITE / RAG_DIRECT)
-├── ingest.py        # 정책 문서 → ChromaDB 벡터화
-├── database.py      # DB 연결 & 쿼리 (Supabase PostgreSQL)
-├── user_service.py  # 사용자 정보 추출 & 저장
-├── data/files/      # 원본 정책 문서 (CSV, PDF, Excel, JSON)
-└── .env             # API 키 (절대 커밋 금지)
+├── main.py              # FastAPI 엔드포인트, LLM/임베딩 초기화
+├── router.py            # 질문 분류 (ASK_CLARIFY / RAG_REWRITE / RAG_DIRECT)
+├── ingest.py            # 정책 문서 → ChromaDB 벡터화
+├── database.py          # DB 연결 & 쿼리 (Supabase PostgreSQL)
+├── user_service.py      # 사용자 정보 추출 & 저장
+├── clarify_service.py   # 추가 정보 요청 옵션 정의
+├── profile_schema.py    # 사용자 프로필 필드 상수 (단일 진실의 원천)
+├── schema.sql           # Supabase 테이블 정의
+├── scripts/
+│   └── retention_cleanup.sql  # 30일 이상 메시지 정리 쿼리
+├── report/              # 정책 리포트 생성 모듈
+├── data/files/          # 원본 정책 문서 (CSV, PDF, Excel, JSON)
+└── .env                 # API 키 (절대 커밋 금지)
 
 frontend/
 ├── index.html       # Vite 진입 HTML (루트에 위치)
@@ -74,8 +80,8 @@ frontend/
 
 | 테이블 | 주요 컬럼 |
 |--------|-----------|
-| `users` | user_id, age, region, job_status, income_level, housing_type, interests |
-| `conversations` | conversation_id (uuid), user_id, title, started_at, last_message_at |
+| `users` | user_id, age, region, job_status, income_level, housing_type, household_size, unemployment_benefit, recent_work_history |
+| `conversations` | conversation_id (uuid), user_id, title, started_at, updated_at, last_message_at |
 | `messages` | message_id (uuid), conversation_id, user_id, role, content, message_type, metadata (jsonb), created_at |
 
 - `conversation_id`: 브라우저 로드마다 새로 생성 → localStorage 보관 → API 요청에 포함
@@ -91,8 +97,8 @@ frontend/
 3. ✅ DB: MySQL → Supabase(PostgreSQL) 교체 완료
 4. ✅ Frontend: Vite + React UI 개편 완료 (카테고리·빠른질문·채팅 통합)
 5. ✅ DB 스키마: chat_history → messages 전환, conversations 세션 관리 추가
-6. ⬜ 실제 정책 데이터 수집 및 ingest
-7. ⬜ Backend 배포: Railway
+6. ✅ 실제 정책 데이터 수집 및 ingest
+7. ⬜ Backend 배포: AWS
 8. ⬜ Frontend 배포: Vercel
 
 ---
@@ -115,4 +121,5 @@ frontend/
 - 프롬프트: `backend/main.py` (`prompt = ChatPromptTemplate...`)
 - 라우터 프롬프트: `backend/router.py`
 - clarify 옵션 정의: `backend/clarify_service.py` (`FIELD_OPTIONS`)
+- 프로필 필드 상수: `backend/profile_schema.py` (`USER_PROFILE_FIELDS`, `ROUTER_MISSING_FIELDS`)
 - 세션 생성/조회: `backend/database.py` (`create_conversation`, `get_chat_history`)

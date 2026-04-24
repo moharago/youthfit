@@ -28,7 +28,7 @@
 | Vector DB | ChromaDB |
 | DB | Supabase (PostgreSQL) |
 | 배포 - Frontend | Vercel |
-| 배포 - Backend | Railway |
+| 배포 - Backend | AWS |
 
 ---
 
@@ -39,7 +39,7 @@
     ↓
 React + Vite (Vercel)
     ↓ REST API
-FastAPI (Railway)
+FastAPI (AWS)
     ├── 사용자 정보 추출 & 저장 → Supabase
     ├── 대화 이력 조회 → Supabase
     ├── 벡터 검색 (RAG) → ChromaDB
@@ -59,7 +59,7 @@ youthfit/
 │   ├── database.py          # DB 연결 & 쿼리
 │   ├── user_service.py      # 사용자 정보 추출 & 저장
 │   ├── clarify_service.py   # 추가 정보 요청 메시지 생성
-│   ├── suggestion_service.py# 후속 질문 추천
+│   ├── profile_schema.py    # 사용자 프로필 필드 상수
 │   ├── report/              # 정책 리포트 생성 모듈
 │   ├── data/
 │   │   ├── files/           # 원본 정책 문서 (CSV, TXT, PDF, Excel, JSON)
@@ -84,6 +84,7 @@ youthfit/
 # .env 파일 생성 (backend/.env)
 OPENAI_API_KEY=sk-...
 DATABASE_URL=postgresql://postgres:[비밀번호]@[supabase-host]:5432/postgres
+ONTONGYOUTH_API_KEY=[온통청년 Open API 키]
 ```
 
 > `DATABASE_URL`은 Supabase 대시보드 → Connect → Direct → URI에서 복사
@@ -96,6 +97,9 @@ cd backend
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
+
+# 정책 데이터 수집 (최초 1회, 온통청년 API 키 필요)
+python fetch_policies.py
 
 # 정책 문서 벡터화 (최초 1회)
 python ingest.py
@@ -125,7 +129,7 @@ Supabase(PostgreSQL) 테이블 구성:
 
 | 테이블 | 설명 |
 |--------|------|
-| `users` | 사용자 프로필 (나이·지역·취업상태·소득수준 등) |
+| `users` | 사용자 프로필 (나이·지역·취업상태·소득수준·주거형태·가구원수·실업급여수급여부·근로이력) |
 | `conversations` | 대화 세션 단위 관리 (세션별 LLM context 격리) |
 | `messages` | 메시지 저장 (role, content, message_type, metadata jsonb) |
 
@@ -145,6 +149,12 @@ Supabase(PostgreSQL) 테이블 구성:
 4. ChromaDB에서 관련 정책 문서 검색
 5. GPT-4o-mini가 문서 기반으로 답변 생성
 6. 응답 DB 저장 & UI 출력
+
+---
+
+## 향후 개선 계획
+
+- **LangGraph 전환** — 현재 `main.py`의 if/else 라우팅 구조를 LangGraph 노드/엣지 기반으로 리팩토링 예정. 각 에이전트(정보 추출 → 라우터 → RAG → 답변 생성 → followup 추출)를 명시적 노드로 분리하여 흐름 가시성 및 유지보수성 향상.
 
 ---
 

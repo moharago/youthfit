@@ -7,6 +7,8 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.pool import QueuePool
 from dotenv import load_dotenv
 
+from profile_schema import INTEGER_PROFILE_FIELDS, USER_PROFILE_FIELDS
+
 load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -18,6 +20,7 @@ engine = create_engine(
     poolclass=QueuePool,
     pool_size=5,
     max_overflow=10,
+    pool_pre_ping=True,
     echo=False
 )
 
@@ -46,8 +49,6 @@ def get_user(user_id: str) -> Optional[Dict[str, Any]]:
         row = result.fetchone()
         if row:
             user = dict(row._mapping)
-            if user.get("interests") and isinstance(user["interests"], str):
-                user["interests"] = json.loads(user["interests"])
             return user
     return None
 
@@ -65,14 +66,20 @@ def create_user(user_id: str) -> Dict[str, Any]:
 def update_user(user_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
     create_user(user_id)
 
-    valid_fields = ["age", "region", "job_status", "income_level", "housing_type", "interests"]
-    filtered = {k: v for k, v in updates.items() if k in valid_fields and v is not None}
+    filtered = {}
+    for k, v in updates.items():
+        if k not in USER_PROFILE_FIELDS or v is None:
+            continue
+        if k in INTEGER_PROFILE_FIELDS:
+            try:
+                filtered[k] = int(v)
+            except (ValueError, TypeError):
+                pass  # "모름" 같은 비정수 값은 저장 안 함
+        else:
+            filtered[k] = v
 
     if not filtered:
         return get_user(user_id)
-
-    if "interests" in filtered and isinstance(filtered["interests"], list):
-        filtered["interests"] = json.dumps(filtered["interests"], ensure_ascii=False)
 
     set_clause = ", ".join(f"{k} = :{k}" for k in filtered.keys())
 
@@ -168,7 +175,7 @@ def get_chat_history(user_id: str, limit: int = 10,
         if conversation_id:
             result = conn.execute(
                 text("""
-                    SELECT role, content, created_at
+                    SELECT role, content, created_at AS timestamp
                     FROM messages
                     WHERE conversation_id = :conversation_id
                     ORDER BY created_at DESC
@@ -179,7 +186,7 @@ def get_chat_history(user_id: str, limit: int = 10,
         else:
             result = conn.execute(
                 text("""
-                    SELECT role, content, created_at
+                    SELECT role, content, created_at AS timestamp
                     FROM messages
                     WHERE user_id = :user_id
                     ORDER BY created_at DESC

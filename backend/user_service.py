@@ -10,6 +10,7 @@ from database import (
     get_chat_history,
     create_user,
 )
+from profile_schema import ROUTER_MISSING_FIELDS
 
 # =====================
 # 대화 저장 & 조회
@@ -31,7 +32,11 @@ def format_history(chats: list) -> str:
     lines = []
     for chat in chats:
         role = "사용자" if chat["role"] == "user" else "상담사"
-        lines.append(f"{role}: {chat['content']}")
+        content = chat["content"]
+        # 어시스턴트 답변이 너무 길면 앞부분만 전달 (LLM이 그대로 반복하는 것 방지)
+        if chat["role"] == "assistant" and len(content) > 200:
+            content = content[:200] + "... [이하 생략]"
+        lines.append(f"{role}: {content}")
     return "\n".join(lines)
 
 # =====================
@@ -74,9 +79,11 @@ def extract_user_info(message: str, llm) -> Dict[str, Any]:
 - age (숫자)
 - region ("서울", "경기" 등)
 - job_status ("구직중", "재직중", "학생", "무직")
-- income_level ("저소득", "중위소득", "일반")
+- income_level ("저소득", "중위소득", "일반", "모름") — "잘 모르겠어요", "모른다", "모름" 등은 "모름"으로 저장
 - housing_type ("자가", "전세", "월세", "기숙사")
-- interests (["취업", "주거", "금융", "창업", "교육", "복지"])
+- household_size (숫자. "1인" → 1, "2인" → 2, "3인" → 3, "4인 이상" → 4)
+- unemployment_benefit ("수급중", "미수급", "모름") — "받고 있어요" → "수급중", "안 받아요" → "미수급", "잘 모르겠어요" → "모름"
+- recent_work_history ("있음", "없음", "모름") — "있어요" → "있음", "없어요" → "없음", "잘 모르겠어요" → "모름"
 
 메시지: "{message}"
 JSON:
@@ -98,6 +105,8 @@ def process_and_save(user_id: str, message: str, llm,
     extracted = extract_user_info(message, llm)
 
     if extracted:
+        # 라우터/DB와 공통으로 관리하는 필드만 저장한다.
+        extracted = {k: v for k, v in extracted.items() if k in ROUTER_MISSING_FIELDS or k == "housing_type"}
         update_user(user_id, extracted)
 
     save_chat(user_id, "user", message, conversation_id, extracted if extracted else None)
