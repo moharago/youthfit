@@ -1,0 +1,11 @@
+.env
+.env.*
+__pycache__/
+*.pyc
+.venv/
+venv/
+data/
+.git/
+tests/
+.DS_Store
+*.pem
