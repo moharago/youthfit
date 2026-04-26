@@ -4,6 +4,8 @@
 
 청년 사용자의 개인 조건(나이, 지역, 취업 상태 등)을 기반으로, 신뢰 가능한 정책 문서만을 활용하여 허위 추천 없이 정확한 정책 정보를 제공하는 AI 상담 서비스입니다.
 
+**라이브 데모:** https://youthfit.vercel.app
+
 ---
 
 ## 주요 기능
@@ -28,7 +30,9 @@
 | Vector DB | ChromaDB |
 | DB | Supabase (PostgreSQL) |
 | 배포 - Frontend | Vercel |
-| 배포 - Backend | AWS |
+| 배포 - Backend | AWS EC2 + Docker |
+| CI/CD | GitHub Actions + Amazon ECR |
+| HTTPS | Cloudflare Tunnel |
 
 ---
 
@@ -37,14 +41,19 @@
 ```text
 사용자 (브라우저)
     ↓
-React + Vite (Vercel)
-    ↓ REST API
-FastAPI (AWS)
+React + Vite (Vercel, HTTPS)
+    ↓ REST API (HTTPS via Cloudflare Tunnel)
+FastAPI (AWS EC2 + Docker)
     ├── 사용자 정보 추출 & 저장 → Supabase
     ├── 대화 이력 조회 → Supabase
     ├── 벡터 검색 (RAG) → ChromaDB
     └── LLM 호출 → OpenAI API
+
+GitHub Actions (main push)
+    → Docker 빌드 → Amazon ECR push → EC2 자동 배포
 ```
+
+> Vercel(HTTPS)에서 EC2(HTTP)로의 Mixed Content 문제를 Cloudflare Tunnel로 해결
 
 ---
 
