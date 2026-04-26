@@ -55,6 +55,19 @@ GitHub Actions (main push)
 
 > Vercel(HTTPS)에서 EC2(HTTP)로의 Mixed Content 문제를 Cloudflare Tunnel로 해결
 
+```mermaid
+graph TD
+    User[사용자 브라우저] --> Vercel[React + Vite\nVercel]
+    Vercel -->|HTTPS - Cloudflare Tunnel| EC2[FastAPI\nAWS EC2 + Docker]
+    EC2 --> Supabase[Supabase\nPostgreSQL]
+    EC2 --> Chroma[ChromaDB\n벡터 DB]
+    EC2 --> OpenAI[OpenAI API\nGPT-4o-mini]
+
+    Dev[개발자 - main push] --> GHA[GitHub Actions]
+    GHA --> ECR[Amazon ECR\n이미지 저장]
+    ECR --> EC2
+```
+
 ---
 
 ## 프로젝트 구조
@@ -161,12 +174,6 @@ Supabase(PostgreSQL) 테이블 구성:
 
 ---
 
-## 향후 개선 계획
-
-- **LangGraph 전환** — 현재 `main.py`의 if/else 라우팅 구조를 LangGraph 노드/엣지 기반으로 리팩토링 예정. 각 에이전트(정보 추출 → 라우터 → RAG → 답변 생성 → followup 추출)를 명시적 노드로 분리하여 흐름 가시성 및 유지보수성 향상.
-
----
-
 ## API 엔드포인트
 
 | Method | Path | 설명 |
@@ -176,3 +183,11 @@ Supabase(PostgreSQL) 테이블 구성:
 | GET | `/report/view` | 리포트 HTML 뷰 |
 | POST | `/report/from_log` | 세션 로그 기반 리포트 생성 |
 | GET | `/report/view_by_id` | 리포트 ID로 HTML 뷰 |
+
+---
+
+## 향후 개선 계획
+
+- **로그인 기능 추가** — 현재 익명 세션 방식에서 회원가입/로그인 기반으로 전환. 로그인 시 나이·지역·취업 상태 등 사용자 프로필과 대화 이력을 계정에 귀속하여 재방문 시에도 이어서 상담 가능.
+- **정책 리포트 고도화** — 상담 종료 후 생성되는 타임라인 기반 정책 전략 리포트를 개선. 로그인 사용자에 한해 리포트 저장·조회 기능 및 맞춤형 정책 추천 정확도 향상.
+- **LangGraph 전환** — 현재 `main.py`의 if/else 라우팅 구조를 LangGraph 노드/엣지 기반으로 리팩토링 예정. 각 에이전트(정보 추출 → 라우터 → RAG → 답변 생성 → followup 추출)를 명시적 노드로 분리하여 흐름 가시성 및 유지보수성 향상.
