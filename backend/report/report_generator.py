@@ -11,7 +11,7 @@ import os
 import re
 from typing import Any, Dict, List, Optional
 
-from langchain_ollama import ChatOllama
+from langchain_openai import ChatOpenAI
 
 from .report_schema import (
     ReportRequest,
@@ -47,12 +47,10 @@ def extract_facts_from_chat(chat_log: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 
 
-def _get_llm() -> ChatOllama:
-    # 팀 main.py와 동일한 기본 모델로 통일
-    # (환경변수 OLLAMA_REPORT_MODEL이 있으면 그걸 우선 사용)
-    model = os.getenv("OLLAMA_REPORT_MODEL", "gemma3:4b")
-    temperature = float(os.getenv("OLLAMA_REPORT_TEMPERATURE", "0"))
-    return ChatOllama(model=model, temperature=temperature)
+def _get_llm() -> ChatOpenAI:
+    model = os.getenv("REPORT_MODEL", "gpt-4o-mini")
+    temperature = float(os.getenv("REPORT_TEMPERATURE", "0"))
+    return ChatOpenAI(model=model, temperature=temperature)
 
 
 
@@ -72,7 +70,7 @@ def _safe_json_parse(text: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def _llm_json(llm: ChatOllama, system_prompt: str, user_prompt: str) -> Dict[str, Any]:
+def _llm_json(llm: ChatOpenAI, system_prompt: str, user_prompt: str) -> Dict[str, Any]:
     """
     ChatOllama.invoke()로 JSON을 받는다.
     - LangChain 메시지 객체를 안 쓰고(팀 코드도 string prompt 사용),
