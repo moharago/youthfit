@@ -2,9 +2,13 @@
 
 import os
 import glob
+import json
 import shutil
 import pandas as pd
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from dotenv import load_dotenv
+from langchain_openai import OpenAIEmbeddings
+
+load_dotenv()
 from langchain_community.vectorstores import Chroma
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
@@ -13,13 +17,9 @@ def run_free_ingestion():
     data_folder = 'data/files'
     persist_directory = "./data/chroma_db"
     
-    # 1. 한국어 임베딩 모델 로드
-    print("⏳ 한국어 임베딩 모델 로딩 중...")
-    hf_embeddings = HuggingFaceEmbeddings(
-        model_name="jhgan/ko-sroberta-multitask",
-        model_kwargs={'device': 'cpu'},
-        encode_kwargs={'normalize_embeddings': True}
-    )
+    # 1. OpenAI 임베딩 모델 로드
+    print("⏳ OpenAI 임베딩 모델 로딩 중...")
+    embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
 
     all_documents = []
     
@@ -47,7 +47,70 @@ def run_free_ingestion():
             all_documents.append(Document(page_content=content, metadata=metadata))
     
     # =====================
-    # 2-2. TXT 파일 처리
+    # 2-2. JSON 파일 처리
+    # =====================
+    json_files = glob.glob(os.path.join(data_folder, '*.json'))
+
+    import re as _re
+
+    for file_path in json_files:
+        print(f"📄 JSON 처리 중: {os.path.basename(file_path)}")
+        with open(file_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        policies = data.get("policies", [])
+        _NATIONAL_AGENCIES = [
+            "고용노동부", "보건복지부", "복지부", "국토교통부", "교육부",
+            "중소벤처기업부", "여성가족부", "기획재정부", "금융위원회",
+        ]
+
+        def _safe_int(value):
+            try:
+                return int(value or 0)
+            except (TypeError, ValueError):
+                return 0
+
+        for policy in policies:
+            application_method = policy.get('application_method', '')
+            age_min = _safe_int(policy.get('target_age_min', 0))
+            age_max = _safe_int(policy.get('target_age_max', 0))
+            age_str = "제한없음" if (age_min == 0 and age_max == 0) else f"{age_min}~{age_max}세"
+
+            agency = policy.get('agency_name', '')
+            is_national = any(a in agency for a in _NATIONAL_AGENCIES)
+            region_str = "전국 (지역 제한 없음, 전국 어디서나 신청 가능)" if is_national else policy.get('region_name', '')
+
+            content = "\n".join([
+                f"정책명: {policy.get('policy_name', '')}",
+                f"분야: {policy.get('policy_category_large', '')} > {policy.get('policy_category_mid', '')}",
+                f"지역: {region_str}",
+                f"대상 나이: {age_str}",
+                f"취업상태: {policy.get('target_employment_status', '')}",
+                f"소득기준: {policy.get('target_income_level', '')}",
+                f"요약: {policy.get('summary', '')}",
+                f"지원내용: {policy.get('support_content', '')}",
+                f"신청방법: {application_method}",
+                f"담당기관: {agency}",
+                f"키워드: {', '.join(policy.get('keywords', []))}",
+            ])
+
+            # application_method에서 URL 추출
+            url_match = _re.search(r'https?://[^\s\)\]]+', application_method)
+            apply_url = url_match.group(0).rstrip('.,>)') if url_match else ''
+
+            metadata = {
+                "source": os.path.basename(file_path),
+                "type": "json",
+                "policy_id": policy.get("policy_id", ""),
+                "policy_name": policy.get("policy_name", ""),
+                "region": policy.get("region_name", ""),
+                "category": policy.get("policy_category_large", ""),
+                "apply_url": apply_url,
+            }
+            all_documents.append(Document(page_content=content, metadata=metadata))
+
+    # =====================
+    # 2-3. TXT 파일 처리
     # =====================
     txt_files = [f for f in glob.glob(os.path.join(data_folder, '*.txt'))
                  if not os.path.basename(f).startswith('~$')]
@@ -110,6 +173,7 @@ def run_free_ingestion():
         return
     
     print(f"\n📊 처리 결과:")
+    print(f"   - JSON 파일: {len(json_files)}개")
     print(f"   - CSV 파일: {len(csv_files)}개")
     print(f"   - TXT 파일: {len(txt_files)}개")
     print(f"   - PDF 파일: {len(pdf_files)}개")
@@ -135,7 +199,7 @@ def run_free_ingestion():
     print(f"🚀 {len(texts)}개의 청크를 벡터 DB에 저장 중...")
     vectorstore = Chroma.from_documents(
         documents=texts,
-        embedding=hf_embeddings,
+        embedding=embeddings,
         persist_directory=persist_directory
     )
     print("✅ 벡터 DB 구축 완료!")
